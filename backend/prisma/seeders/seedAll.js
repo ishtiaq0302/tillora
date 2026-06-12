@@ -51,14 +51,14 @@ async function main() {
   // 2. TENANT
   // ═══════════════════════════════════════════════════════════════
   let tenant = await prisma.tenant.findFirst({
-    where: { email: "info@alitraders.pk" },
+    where: { email: "tillora@store.com" },
   });
   if (!tenant) {
     tenant = await prisma.tenant.create({
       data: {
-        businessName: "Ali Traders",
-        slug: "ali-traders",
-        email: "info@alitraders.pk",
+        businessName: "Zero 6 Mall",
+        slug: "zero-6-mall",
+        email: "tillora@store.com",
         phone: "+92-21-3456789",
         subscriptionPlanId: plan.id,
         subscriptionStatus: "active",
@@ -70,7 +70,7 @@ async function main() {
     });
     log(`Tenant: ${tenant.businessName}`);
   } else {
-    skip(`Tenant: info@alitraders.pk`);
+    skip(`Tenant: tillora@store.com`);
   }
   const tenantId = tenant.id;
 
@@ -78,7 +78,7 @@ async function main() {
   // 3. STORES
   // ═══════════════════════════════════════════════════════════════
   let storeMain = await prisma.store.findFirst({
-    where: { tenantId, code: "KHI-MAIN" },
+    where: { tenantId, code: "ZERO-SIX" },
   });
   if (!storeMain) {
     storeMain = await prisma.store.create({
@@ -122,7 +122,7 @@ async function main() {
         country: "Pakistan",
         zipCode: "75600",
         phone: "+92-21-3567890",
-        email: "cafe@alitraders.pk",
+        email: "cafe@gmail.com",
         currency: "PKR",
         timezone: "Asia/Karachi",
         dateFormat: "d-m-Y",
@@ -131,7 +131,7 @@ async function main() {
     });
     log(`Store: ${storeRestaurant.name}`);
   } else {
-    skip(`Store: KHI-REST`);
+    skip(`Store: ZERO-SEX`);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -140,17 +140,38 @@ async function main() {
   const langEn = await prisma.language.upsert({
     where: { code: "en" },
     update: {},
-    create: { code: "en", name: "English", nativeName: "English", isRtl: false, isDefault: true, isActive: true },
+    create: {
+      code: "en",
+      name: "English",
+      nativeName: "English",
+      isRtl: false,
+      isDefault: true,
+      isActive: true,
+    },
   });
   const langUr = await prisma.language.upsert({
     where: { code: "ur" },
     update: {},
-    create: { code: "ur", name: "Urdu", nativeName: "اردو", isRtl: true, isDefault: false, isActive: true },
+    create: {
+      code: "ur",
+      name: "Urdu",
+      nativeName: "اردو",
+      isRtl: true,
+      isDefault: false,
+      isActive: true,
+    },
   });
   const langZh = await prisma.language.upsert({
     where: { code: "zh" },
     update: {},
-    create: { code: "zh", name: "Chinese", nativeName: "中文", isRtl: false, isDefault: false, isActive: true },
+    create: {
+      code: "zh",
+      name: "Chinese",
+      nativeName: "中文",
+      isRtl: false,
+      isDefault: false,
+      isActive: true,
+    },
   });
   log(`Languages: English, Urdu, Chinese`);
 
@@ -184,19 +205,39 @@ async function main() {
     },
   });
   await prisma.storeLanguage.upsert({
-    where: { storeId_languageId: { storeId: storeRestaurant.id, languageId: langUr.id } },
+    where: {
+      storeId_languageId: {
+        storeId: storeRestaurant.id,
+        languageId: langUr.id,
+      },
+    },
     update: {},
-    create: { storeId: storeRestaurant.id, languageId: langUr.id, isDefault: false },
+    create: {
+      storeId: storeRestaurant.id,
+      languageId: langUr.id,
+      isDefault: false,
+    },
   });
   await prisma.storeLanguage.upsert({
-    where: { storeId_languageId: { storeId: storeMain.id, languageId: langZh.id } },
+    where: {
+      storeId_languageId: { storeId: storeMain.id, languageId: langZh.id },
+    },
     update: {},
     create: { storeId: storeMain.id, languageId: langZh.id, isDefault: false },
   });
   await prisma.storeLanguage.upsert({
-    where: { storeId_languageId: { storeId: storeRestaurant.id, languageId: langZh.id } },
+    where: {
+      storeId_languageId: {
+        storeId: storeRestaurant.id,
+        languageId: langZh.id,
+      },
+    },
     update: {},
-    create: { storeId: storeRestaurant.id, languageId: langZh.id, isDefault: false },
+    create: {
+      storeId: storeRestaurant.id,
+      languageId: langZh.id,
+      isDefault: false,
+    },
   });
   log(`StoreLanguages: assigned to both stores`);
 
@@ -402,7 +443,7 @@ async function main() {
     {
       firstName: "Kamran",
       lastName: "Khan",
-      email: "manager@gmail.scom",
+      email: "manager@gmail.com",
       password: "manager",
       role: "Store Manager",
       isSuperAdmin: false,
@@ -1019,7 +1060,7 @@ async function main() {
           hasBatch: false,
           isActive: true,
           isGlobal: true,
-          createdBy: users["admin@alitraders.pk"].id,
+          createdBy: users["admin@gmail.com"].id,
         },
       });
     }
@@ -1244,7 +1285,7 @@ async function main() {
           stockAlertQuantity: 5,
           isActive: true,
           isGlobal: true,
-          createdBy: users["admin@alitraders.pk"].id,
+          createdBy: users["admin@gmail.com"].id,
         },
       });
     }
@@ -1438,7 +1479,7 @@ async function main() {
       data: {
         tenantId,
         storeId: storeMain.id,
-        userId: users["cashier@alitraders.pk"].id,
+        userId: users["cashier@gmail.com"].id,
         openingBalance: 5000,
         openedAt: new Date("2026-06-08T09:00:00"),
         status: "open",
@@ -1457,7 +1498,7 @@ async function main() {
       data: {
         tenantId,
         storeId: storeRestaurant.id,
-        userId: users["cashier@alitraders.pk"].id,
+        userId: users["cashier@gmail.com"].id,
         openingBalance: 3000,
         openedAt: new Date("2026-06-08T10:00:00"),
         status: "open",
@@ -1477,7 +1518,7 @@ async function main() {
       data: {
         tenantId,
         storeId: storeMain.id,
-        userId: users["cashier@alitraders.pk"].id,
+        userId: users["cashier@gmail.com"].id,
         openingBalance: 4000,
         closingBalance: 52340,
         openedAt: new Date("2026-06-07T09:00:00"),
@@ -1590,7 +1631,7 @@ async function main() {
         grandTotal: subtotal,
         paymentStatus: "paid",
         purchaseStatus: "received",
-        createdBy: users["admin@alitraders.pk"].id,
+        createdBy: users["admin@gmail.com"].id,
         createdAt: pur.createdAt,
         items: {
           create: pur.items.map((it) => ({
@@ -1616,7 +1657,7 @@ async function main() {
           quantity: it.qty,
           referenceType: "purchase",
           referenceId: purchase.id,
-          createdBy: users["admin@alitraders.pk"].id,
+          createdBy: users["admin@gmail.com"].id,
           notes: `Purchase ${pur.invoiceNo}`,
         },
       });
@@ -1889,7 +1930,7 @@ async function main() {
         grandTotal,
         paymentStatus: sd.paymentStatus,
         saleStatus: sd.saleStatus,
-        createdBy: users["cashier@alitraders.pk"].id,
+        createdBy: users["cashier@gmail.com"].id,
         createdAt: sd.createdAt,
         items: {
           create: sd.items.map((it) => ({
@@ -1916,7 +1957,7 @@ async function main() {
           quantity: -it.qty,
           referenceType: "sale",
           referenceId: sale.id,
-          createdBy: users["cashier@alitraders.pk"].id,
+          createdBy: users["cashier@gmail.com"].id,
           notes: `Sale ${sd.invoiceNo}`,
         },
       });
@@ -2013,7 +2054,7 @@ async function main() {
           amount: ed.amount,
           expenseDate: new Date(ed.date),
           notes: ed.notes,
-          createdBy: users["accounts@alitraders.pk"].id,
+          createdBy: users["accounts@gmail.com"].id,
         },
       });
     }
@@ -2025,23 +2066,43 @@ async function main() {
   // Run node prisma/seeders/seedLanguageTranslations.js for the full set.
   // ═══════════════════════════════════════════════════════════════
   const uiTranslations = [
-    { group: "nav",    key: "dashboard",  languages: { ur: "ڈیش بورڈ",  zh: "仪表板" } },
-    { group: "nav",    key: "sales",      languages: { ur: "فروخت",      zh: "销售"   } },
-    { group: "nav",    key: "purchases",  languages: { ur: "خریداری",    zh: "采购"   } },
-    { group: "nav",    key: "products",   languages: { ur: "مصنوعات",    zh: "产品"   } },
-    { group: "nav",    key: "customers",  languages: { ur: "گاہک",       zh: "客户"   } },
-    { group: "nav",    key: "reports",    languages: { ur: "رپورٹس",     zh: "报表"   } },
-    { group: "nav",    key: "settings",   languages: { ur: "ترتیبات",    zh: "设置"   } },
-    { group: "pos",    key: "total",      languages: { ur: "کل رقم",     zh: "合计"   } },
-    { group: "pos",    key: "discount",   languages: { ur: "چھوٹ",       zh: "折扣"   } },
-    { group: "pos",    key: "pay",        languages: { ur: "ادائیگی",    zh: "付款"   } },
-    { group: "common", key: "save",       languages: { ur: "محفوظ کریں", zh: "保存"   } },
-    { group: "common", key: "cancel",     languages: { ur: "منسوخ",      zh: "取消"   } },
-    { group: "common", key: "delete",     languages: { ur: "حذف کریں",   zh: "删除"   } },
-    { group: "common", key: "edit",       languages: { ur: "ترمیم",      zh: "编辑"   } },
-    { group: "common", key: "search",     languages: { ur: "تلاش",       zh: "搜索"   } },
-    { group: "common", key: "active",     languages: { ur: "فعال",       zh: "启用"   } },
-    { group: "common", key: "inactive",   languages: { ur: "غیر فعال",   zh: "禁用"   } },
+    {
+      group: "nav",
+      key: "dashboard",
+      languages: { ur: "ڈیش بورڈ", zh: "仪表板" },
+    },
+    { group: "nav", key: "sales", languages: { ur: "فروخت", zh: "销售" } },
+    {
+      group: "nav",
+      key: "purchases",
+      languages: { ur: "خریداری", zh: "采购" },
+    },
+    { group: "nav", key: "products", languages: { ur: "مصنوعات", zh: "产品" } },
+    { group: "nav", key: "customers", languages: { ur: "گاہک", zh: "客户" } },
+    { group: "nav", key: "reports", languages: { ur: "رپورٹس", zh: "报表" } },
+    { group: "nav", key: "settings", languages: { ur: "ترتیبات", zh: "设置" } },
+    { group: "pos", key: "total", languages: { ur: "کل رقم", zh: "合计" } },
+    { group: "pos", key: "discount", languages: { ur: "چھوٹ", zh: "折扣" } },
+    { group: "pos", key: "pay", languages: { ur: "ادائیگی", zh: "付款" } },
+    {
+      group: "common",
+      key: "save",
+      languages: { ur: "محفوظ کریں", zh: "保存" },
+    },
+    { group: "common", key: "cancel", languages: { ur: "منسوخ", zh: "取消" } },
+    {
+      group: "common",
+      key: "delete",
+      languages: { ur: "حذف کریں", zh: "删除" },
+    },
+    { group: "common", key: "edit", languages: { ur: "ترمیم", zh: "编辑" } },
+    { group: "common", key: "search", languages: { ur: "تلاش", zh: "搜索" } },
+    { group: "common", key: "active", languages: { ur: "فعال", zh: "启用" } },
+    {
+      group: "common",
+      key: "inactive",
+      languages: { ur: "غیر فعال", zh: "禁用" },
+    },
   ];
 
   const uiLangMap = { ur: langUr, zh: langZh };
@@ -2053,16 +2114,27 @@ async function main() {
       await prisma.translation.upsert({
         where: {
           tenantId_languageId_translationGroup_translationKey: {
-            tenantId, languageId: lang.id, translationGroup: group, translationKey: key,
+            tenantId,
+            languageId: lang.id,
+            translationGroup: group,
+            translationKey: key,
           },
         },
         update: {},
-        create: { tenantId, languageId: lang.id, translationGroup: group, translationKey: key, translationValue: value },
+        create: {
+          tenantId,
+          languageId: lang.id,
+          translationGroup: group,
+          translationKey: key,
+          translationValue: value,
+        },
       });
       translationCount++;
     }
   }
-  log(`Translations: ${uiTranslations.length} keys × ${Object.keys(uiLangMap).length} languages = ${translationCount} records`);
+  log(
+    `Translations: ${uiTranslations.length} keys × ${Object.keys(uiLangMap).length} languages = ${translationCount} records`,
+  );
 
   // ═══════════════════════════════════════════════════════════════
   // 26. SUBSCRIPTION RECORD
@@ -2093,11 +2165,11 @@ async function main() {
   console.log("\n🎉  Seed complete!\n");
   console.log("  LOGIN CREDENTIALS:");
   console.log("  ─────────────────────────────────────────────");
-  console.log("  Super Admin  →  admin@alitraders.pk     / admin123");
-  console.log("  Store Manager→  manager@alitraders.pk   / manager123");
-  console.log("  Cashier      →  cashier@alitraders.pk   / cashier123");
-  console.log("  Accountant   →  accounts@alitraders.pk  / acc123");
-  console.log("  Inv Manager  →  inventory@alitraders.pk / inv123");
+  console.log("  Super Admin  →  admin@gmail.com     / admin123");
+  console.log("  Store Manager→  manager@gmail.com   / manager123");
+  console.log("  Cashier      →  cashier@gmail.com   / cashier123");
+  console.log("  Accountant   →  accounts@gmail.com  / acc123");
+  console.log("  Inv Manager  →  inventory@gmail.com / inv123");
   console.log("  ─────────────────────────────────────────────\n");
 }
 
