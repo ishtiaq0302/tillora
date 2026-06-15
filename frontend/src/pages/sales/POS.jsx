@@ -8,7 +8,7 @@ import masterService from "../../services/masterService";
 import useStoreRefresh from "../../hooks/useStoreRefresh";
 import { useAuth } from "../../context/AuthContext";
 
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
 
 const inlineInput = {
   background: "var(--inp)", border: "1px solid var(--inpbd)", borderRadius: "var(--r)",

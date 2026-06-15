@@ -10,7 +10,7 @@ import Button from "../component/Button";
 import Badge from "../component/Badge";
 import { useLanguage } from "../../context/LanguageContext";
 
-const SERVER_URL = "http://localhost:5000";
+const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
 
 const pageSizeStyle = {
   background: "var(--inp)", border: "1px solid var(--inpbd)", borderRadius: "var(--r)",
