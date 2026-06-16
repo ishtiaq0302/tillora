@@ -182,7 +182,7 @@ export const updateStore = async (req, res) => {
         return res.status(400).json({ message: "Store code already exists" });
     }
 
-    // Handle logo — delete old file if new one uploaded
+    // Handle logo — replace, remove, or keep existing
     let logo = store.logo;
     if (req.file) {
       if (store.logo) {
@@ -190,6 +190,10 @@ export const updateStore = async (req, res) => {
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       }
       logo = `/uploads/logos/${req.file.filename}`;
+    } else if (req.body.removeLogo === "true" && store.logo) {
+      const oldPath = store.logo.replace("/", "");
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      logo = null;
     }
 
     const updated = await prisma.store.update({

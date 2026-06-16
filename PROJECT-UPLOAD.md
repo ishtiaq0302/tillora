@@ -1,169 +1,168 @@
-# POS System — Deployment Guide (tillora.store on StackCP)
+# POS System — Deployment Guide
 
-## Overview
+## Architecture (What We Actually Use)
 
 ```
-GitHub Repository
+GitHub Repository (ishtiaq0302/tillora)
        │
-       ├──► StackCP (tillora.store)
-       │         ├── Frontend  → React build (static files)
+       ├──► StackCP — tillora.store  (cPanel shared hosting)
+       │         └── Frontend  → React build (static files in tillora/ folder)
+       │
+       ├──► Railway.app (free Node.js hosting)
        │         └── Backend   → Node.js + Express + Prisma
        │
-       └──► Neon (cloud PostgreSQL, free)
-                 └── Database  → PostgreSQL (StackCP has no PostgreSQL)
+       └──► Neon.tech (free cloud PostgreSQL)
+                 └── Database  → PostgreSQL
 ```
+
+> StackCP (cPanel) does NOT support Node.js. That is why the backend runs on Railway.
 
 ---
 
-## PART 1 — Set Up Cloud PostgreSQL Database (Neon)
+## CURRENT LIVE URLS
 
-StackCP only supports MySQL. Your project uses PostgreSQL, so you need a free cloud database.
+| Service  | URL                                          |
+| -------- | -------------------------------------------- |
+| Frontend | https://tillora.store                        |
+| Backend  | https://tillora-production.up.railway.app    |
+| Database | Neon → project: neondb (us-west-2)           |
+| GitHub   | https://github.com/ishtiaq0302/tillora       |
+
+---
+
+## PART 1 — Set Up Database (Neon)
 
 ### Step 1.1 — Create Neon Account and Database
 
 1. Go to **https://neon.tech** and sign up (free, no credit card)
-2. Click **New Project**
-3. Set project name: `tillora-pos`
-4. Choose region: **EU West** (closest to UK StackCP servers)
-5. Click **Create Project**
-6. On the dashboard, go to **Connection Details**
-7. Copy the **Connection string** — it looks like:
+2. Click **New Project** → give it a name
+3. Choose a region close to your backend host
+4. Click **Create Project**
+5. Go to **Connection Details** → copy the connection string:
    ```
-   postgresql://username:password@ep-xxxxxx.eu-west-2.aws.neon.tech/neondb?sslmode=require
+   postgresql://username:password@ep-xxxxxx.region.aws.neon.tech/neondb?sslmode=require&channel_binding=require
    ```
-   **Save this — you will need it in multiple steps below.**
+   Save this — you need it in every step below.
 
 ---
 
-### Step 1.2 — Export Your Local PostgreSQL Database
+### Step 1.2 — Export Local PostgreSQL Database
 
-Open a terminal on your local machine (WAMP is running):
+Run in PowerShell (PostgreSQL is at `E:\postgresql\bin`):
 
-```bash
-cd C:\Program Files\PostgreSQL\<version>\bin
-
-pg_dump -U postgres -d pos -F p -f C:\pos_backup.sql
+```powershell
+& "E:\postgresql\bin\pg_dump.exe" -h localhost -U postgres -d pos -Fc --no-owner --no-privileges -f "e:\wamp\www\pos\sql\pos_backup.dump"
 ```
 
-> If asked for a password, enter your local PostgreSQL password (default is `postgres`).
+Enter password: `postgres`
 
-This creates a full backup file at `C:\pos_backup.sql`.
+> `-Fc` creates a binary custom-format dump. Do NOT use plain SQL export from pgAdmin — it uses spaces instead of tabs and breaks COPY commands.
 
 ---
 
-### Step 1.3 — Import Your Data into Neon
+### Step 1.3 — Import Data into Neon
 
-**Option A — Command line (psql):**
-
-```bash
-psql "postgresql://username:password@ep-xxxxxx.eu-west-2.aws.neon.tech/neondb?sslmode=require" -f C:\pos_backup.sql
+```powershell
+& "E:\postgresql\bin\pg_restore.exe" --no-owner --no-privileges --clean --if-exists -d "YOUR_NEON_CONNECTION_STRING" "e:\wamp\www\pos\sql\pos_backup.dump"
 ```
 
-**Option B — Neon SQL Editor (easier, no tools needed):**
-
-1. In Neon dashboard, click **SQL Editor**
-2. Open `C:\pos_backup.sql` in Notepad
-3. Copy all contents, paste into Neon SQL Editor
-4. Click **Run**
+No output = success.
 
 ---
 
-## PART 2 — Prepare Backend for Production
+### Step 1.4 — Verify Connection
+
+```powershell
+cd "e:\wamp\www\pos\backend"
+npx prisma db pull
+```
+
+If it lists your models, the connection works.
+
+---
+
+## PART 2 — Set Up Backend (Railway)
 
 ### Step 2.1 — Update backend/.env
 
-Open `backend/.env` and replace the DATABASE_URL line:
-
 ```env
-PORT=5000
+# Local PostgreSQL (for local development)
+# DATABASE_URL="postgresql://postgres:postgres@localhost:5432/pos"
 
-DATABASE_URL="postgresql://username:password@ep-xxxxxx.eu-west-2.aws.neon.tech/neondb?sslmode=require"
+# Neon (cloud — used for production)
+DATABASE_URL="postgresql://neondb_owner:PASSWORD@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 JWT_SECRET=pos-system-secret-key-jwt
-
+PORT=5000
 PADDLE_SANDBOX=true
 PADDLE_API_KEY=your_paddle_api_key
 PADDLE_WEBHOOK_SECRET=your_paddle_webhook_secret
 ```
 
-> Replace the DATABASE_URL with the connection string you copied from Neon in Step 1.1.
-
 ---
 
-### Step 2.2 — Verify Prisma Connects to Neon
+### Step 2.2 — Deploy Backend to Railway
 
-Run in your local terminal:
+1. Go to **https://railway.app** → sign up with GitHub
+2. Click **New Project** → **Deploy from GitHub repo**
+3. Select your repository
+4. Set **Root Directory** to `backend`
+5. Add Environment Variables in Railway dashboard:
 
-```bash
-cd backend
-npx prisma db pull
+```
+DATABASE_URL = postgresql://neondb_owner:PASSWORD@ep-xxxx.region.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+JWT_SECRET   = pos-system-secret-key-jwt
+PORT         = 5000
+PADDLE_SANDBOX = true
+PADDLE_API_KEY = your_paddle_api_key
+PADDLE_WEBHOOK_SECRET = your_paddle_webhook_secret
 ```
 
-If it prints your schema successfully, the connection to Neon is working.
+6. Click **Deploy** → wait for success
+7. Go to **Settings → Domains → Generate Domain** → copy the URL
+   e.g. `https://yourapp-production.up.railway.app`
 
 ---
 
-### Step 2.3 — Check backend/package.json Has a Start Script
+## PART 3 — Set Up Frontend (StackCP — tillora.store)
 
-Open `backend/package.json` and make sure there is a `start` script:
-
-```json
-"scripts": {
-  "start": "node server.js",
-  "dev": "nodemon server.js"
-}
-```
-
-> StackCP needs `npm start` to run your backend.
-
----
-
-## PART 3 — Build the Frontend
-
-### Step 3.1 — Set Production API URL
-
-Open `frontend/.env` and set the backend URL to your live domain:
+### Step 3.1 — Update frontend/.env
 
 ```env
-VITE_API_URL=https://tillora.store/api
+# Local development
+# VITE_API_URL=http://localhost:5000/api
+
+# Production (Railway backend URL)
+VITE_API_URL=https://tillora-production.up.railway.app/api
+
+VITE_PADDLE_SANDBOX=true
+VITE_PADDLE_CLIENT_TOKEN=your_paddle_client_token
 ```
 
-> If your backend runs on a subdomain (e.g. api.tillora.store), use that instead.
+> `VITE_API_URL` must point to your Railway backend URL with `/api` at the end.
 
 ---
 
 ### Step 3.2 — Build the React App
 
-```bash
-cd frontend
+```powershell
+cd "e:\wamp\www\pos\frontend"
 npm run build
 ```
 
-This creates a `frontend/dist/` folder with all static files ready to deploy.
+This creates `frontend/dist/` with `index.html` and `assets/` folder.
 
 ---
 
-## PART 4 — Deploy to StackCP (tillora.store)
+### Step 3.3 — Upload to StackCP
 
-### Step 4.1 — Push All Changes to GitHub
-
-```bash
-git add .
-git commit -m "Production build and Neon database config"
-git push origin master
-```
-
----
-
-### Step 4.2 — Deploy Frontend (Static Files)
-
-1. Log in to **StackCP** → go to **File Manager** or use **FTP**
-2. Navigate to `public_html/` (this is your web root for tillora.store)
-3. Upload everything inside `frontend/dist/` into `public_html/`
-   - The files to upload: `index.html`, `assets/` folder, etc.
-4. Make sure `index.html` is directly inside `public_html/`
-
-**For React Router to work**, create a `.htaccess` file inside `public_html/`:
+1. Log in to **StackCP** → **File Manager**
+2. Navigate to the **`tillora/`** folder (document root for tillora.store)
+3. Delete old `index.html` and `assets/` folder inside `tillora/`
+4. Upload from your local `frontend/dist/`:
+   - `index.html` → into `tillora/`
+   - `assets/` folder → into `tillora/`
+5. Make sure `.htaccess` exists inside `tillora/` with:
 
 ```
 Options -MultiViews
@@ -172,118 +171,120 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ index.html [QSA,L]
 ```
 
----
+6. Hard refresh browser: `Ctrl + Shift + R`
 
-### Step 4.3 — Deploy Backend (Node.js App)
-
-1. In StackCP, find **Node.js** or **Web Applications** section
-2. Create a new Node.js application:
-   - **Domain:** tillora.store (or api.tillora.store if using subdomain)
-   - **Application root:** `/backend` (or the path where you uploaded backend files)
-   - **Startup file:** `server.js`
-   - **Node version:** 18 or higher
-3. Upload your `backend/` folder to the application root using File Manager or FTP
-   - **Do NOT upload `node_modules/`** — StackCP will install them
-
-4. In the Node.js app settings in StackCP, add these **Environment Variables**:
-
-   ```
-   DATABASE_URL = postgresql://username:password@ep-xxxxxx.eu-west-2.aws.neon.tech/neondb?sslmode=require
-   JWT_SECRET = pos-system-secret-key-jwt
-   PORT = 5000
-   PADDLE_SANDBOX = true
-   PADDLE_API_KEY = your_paddle_api_key
-   PADDLE_WEBHOOK_SECRET = your_paddle_webhook_secret
-   ```
-
-   > Set these in StackCP's UI — do NOT rely on the .env file on the server for secrets.
-
-5. Click **Run NPM Install** (or SSH and run `npm install`)
-6. Click **Start Application**
+> **Important:** `softonxt.com` uses `public_html/`. `tillora.store` uses `tillora/`. Never mix them up.
 
 ---
 
-### Step 4.4 — Run Prisma Migrations on the Server
+## PART 4 — Push to GitHub
 
-After the backend is deployed, run migrations so the database schema is up to date.
+```powershell
+cd "e:\wamp\www\pos"
+git add .
+git commit -m "your message here"
+git push origin master
+```
 
-If StackCP gives you SSH access:
+Railway auto-redeploys the backend on every push to master.
 
-```bash
-cd /path/to/backend
+---
+
+---
+
+## HOW TO UPDATE AFTER CHANGES
+
+### If you changed the DATABASE (new migration)
+
+```powershell
+cd "e:\wamp\www\pos\backend"
 npx prisma migrate deploy
 ```
 
-If no SSH access, you can run this locally while DATABASE_URL points to Neon:
+This runs pending migrations against Neon. Run this locally while `DATABASE_URL` in `backend/.env` points to Neon.
 
-```bash
-cd backend
+If you added a new model or changed the schema locally first:
+
+```powershell
+npx prisma migrate dev --name describe_your_change
 npx prisma migrate deploy
 ```
 
 ---
 
-## PART 5 — Verify Everything Works
+### If you changed BACKEND FILES (Node.js / API)
 
-### Checklist
+Just push to GitHub — Railway auto-redeploys:
 
-- [ ] Visit `https://tillora.store` — frontend loads
-- [ ] Login page works — JWT auth connects to backend
-- [ ] Products, Sales, and other pages load data from the database
-- [ ] Check browser console for any API errors (wrong URL, CORS, etc.)
-- [ ] Check StackCP Node.js app logs if backend is not responding
-
----
-
-## PART 6 — CORS Fix (if API calls fail)
-
-If you see CORS errors in the browser, open `backend/server.js` (or wherever CORS is configured) and make sure your domain is allowed:
-
-```js
-app.use(
-  cors({
-    origin: ["https://tillora.store", "http://localhost:5173"],
-    credentials: true,
-  }),
-);
+```powershell
+cd "e:\wamp\www\pos"
+git add .
+git commit -m "Backend: describe your change"
+git push origin master
 ```
 
+Railway picks up the push and redeploys within ~1 minute. Check Railway dashboard for deploy status.
+
 ---
 
-## PART 7 — GitHub Auto-Deploy (Optional)
+### If you changed FRONTEND FILES (React components, pages, styles)
 
-If StackCP supports Git deployment (20i does):
+**Step 1 — Rebuild:**
+```powershell
+cd "e:\wamp\www\pos\frontend"
+npm run build
+```
 
-1. In StackCP → **Git** or **Deployments**, connect your GitHub repository
-2. Set branch to `master`
-3. Set deploy path to `public_html/` for frontend, or backend app root for backend
-4. Enable auto-deploy on push
+**Step 2 — Push to GitHub:**
+```powershell
+cd "e:\wamp\www\pos"
+git add .
+git commit -m "Frontend: describe your change"
+git push origin master
+```
 
-For frontend, you still need to **build locally** (`npm run build`) and push the `dist/` files, OR set up a GitHub Action to build and push automatically.
+**Step 3 — Upload new dist to StackCP:**
+1. Go to StackCP → File Manager → `tillora/`
+2. Delete old `assets/` folder and `index.html`
+3. Upload new `frontend/dist/assets/` and `frontend/dist/index.html`
+4. Hard refresh browser: `Ctrl + Shift + R`
+
+---
+
+### If you changed BOTH frontend and backend
+
+1. Push to GitHub (backend auto-deploys via Railway)
+2. Rebuild frontend and upload to StackCP manually
 
 ---
 
 ## Quick Reference
 
-| What               | Where                                        |
-| ------------------ | -------------------------------------------- |
-| Frontend files     | `public_html/` on StackCP                    |
-| Backend files      | Node.js app root on StackCP                  |
-| Database           | Neon (cloud PostgreSQL)                      |
-| DATABASE_URL       | Set in StackCP Node.js environment variables |
-| Build frontend     | `cd frontend && npm run build`               |
-| Test DB connection | `cd backend && npx prisma db pull`           |
-| Live site          | https://tillora.store                        |
+| What                  | Where / Command                                              |
+| --------------------- | ------------------------------------------------------------ |
+| Frontend files        | `tillora/` folder on StackCP                                 |
+| Backend hosting       | Railway.app (auto-deploys from GitHub)                       |
+| Database              | Neon.tech (cloud PostgreSQL)                                 |
+| Local PostgreSQL bin  | `E:\postgresql\bin`                                          |
+| Local database name   | `pos` (user: postgres, password: postgres)                   |
+| Build frontend        | `cd frontend && npm run build`                               |
+| Test DB connection    | `cd backend && npx prisma db pull`                           |
+| Run migrations        | `cd backend && npx prisma migrate deploy`                    |
+| Push to GitHub        | `git add . && git commit -m "msg" && git push origin master` |
+| Live site             | https://tillora.store                                        |
+| Backend API           | https://tillora-production.up.railway.app/api                |
 
 ---
 
 ## Troubleshooting
 
-| Problem                   | Fix                                                              |
-| ------------------------- | ---------------------------------------------------------------- |
-| Site shows blank page     | Check `.htaccess` is in `public_html/`                           |
-| API calls return 404      | Check backend Node.js app is running in StackCP                  |
-| Database connection fails | Verify DATABASE_URL in StackCP env variables matches Neon string |
-| CORS error in browser     | Add `https://tillora.store` to allowed origins in backend        |
-| Prisma schema mismatch    | Run `npx prisma migrate deploy` pointing to Neon                 |
-| Node modules missing      | Run NPM Install in StackCP Node.js app panel                     |
+| Problem                        | Fix                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| Site shows blank page          | Check `.htaccess` is in `tillora/` folder on StackCP                         |
+| Login fails / API 404          | Check Railway backend is running — visit Railway dashboard                   |
+| Still calling localhost:5000   | Rebuild frontend after updating `frontend/.env`, upload new dist to StackCP  |
+| Database connection fails      | Verify `DATABASE_URL` in Railway environment variables matches Neon string   |
+| CORS error in browser          | Add your domain to allowed origins in `backend/server.js`                    |
+| Prisma schema mismatch         | Run `cd backend && npx prisma migrate deploy`                                |
+| Old files still loading        | Hard refresh: `Ctrl + Shift + R` or clear browser cache                      |
+| pg_restore errors on import    | Use `-Fc` format with `pg_dump`, never plain SQL export from pgAdmin         |

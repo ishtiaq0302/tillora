@@ -47,6 +47,8 @@ export default function StoreForm() {
   const [errors, setErrors] = useState({});
   const [logoPreview, setLogoPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const [existingLogo, setExistingLogo] = useState(null);
+  const [logoRemoved, setLogoRemoved] = useState(false);
   const [codeManuallyEdited, setCodeManuallyEdited] = useState(false);
   const fileRef = useRef();
 
@@ -91,7 +93,10 @@ export default function StoreForm() {
           taxNumber: data.taxNumber || "",
           isActive: data.isActive ?? true,
         });
-        if (data.logo) setLogoPreview(`${SERVER_URL}${data.logo}`);
+        if (data.logo) {
+          setLogoPreview(`${SERVER_URL}${data.logo}`);
+          setExistingLogo(data.logo);
+        }
         if (data.code) setCodeManuallyEdited(true);
       } catch (err) {
         console.log(err);
@@ -131,6 +136,7 @@ export default function StoreForm() {
     }
     setLogoFile(file);
     setLogoPreview(URL.createObjectURL(file));
+    setLogoRemoved(false);
     setErrors((prev) => ({ ...prev, logo: "" }));
   };
 
@@ -138,6 +144,7 @@ export default function StoreForm() {
     setLogoFile(null);
     setLogoPreview(null);
     if (fileRef.current) fileRef.current.value = "";
+    if (isEdit && existingLogo) setLogoRemoved(true);
   };
 
   const validate = () => {
@@ -179,7 +186,11 @@ export default function StoreForm() {
       Object.entries({ ...form, code: finalCode }).forEach(([key, val]) =>
         payload.append(key, val),
       );
-      if (logoFile) payload.append("logo", logoFile);
+      if (logoFile) {
+        payload.append("logo", logoFile);
+      } else if (isEdit && logoRemoved) {
+        payload.append("removeLogo", "true");
+      }
 
       if (isEdit) {
         await updateStore(id, payload);

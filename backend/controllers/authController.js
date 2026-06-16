@@ -261,7 +261,9 @@ export const login = async (req, res) => {
         stores: user.storeUsers.map((su) => ({
           id: su.store.id,
           name: su.store.name,
+          code: su.store.code,
           storeType: su.store.storeType,
+          logo: su.store.logo,
         })),
 
         currentStore: user.storeUsers[0]?.store || null,
@@ -362,7 +364,9 @@ export const me = async (req, res) => {
       stores: user.storeUsers.map((su) => ({
         id: su.store.id,
         name: su.store.name,
+        code: su.store.code,
         storeType: su.store.storeType,
+        logo: su.store.logo,
       })),
 
       currentStore: user.storeUsers[0]?.store || null,

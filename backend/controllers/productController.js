@@ -1,5 +1,6 @@
 import prisma from "../lib/prisma.js";
 import { logAudit } from "../lib/audit.js";
+import fs from "fs";
 
 const TYPE_MAP = { simple: "SIMPLE", variant: "VARIABLE", combo: "COMBO", service: "SIMPLE" };
 const TYPE_REVERSE = { SIMPLE: "simple", VARIABLE: "variant", COMBO: "combo" };
@@ -56,7 +57,7 @@ export const createProduct = async (req, res) => {
         sku: d.sku || null,
         barcode: d.barcode || null,
         description: d.description || null,
-        image: req.file ? req.file.path : (d.image || null),
+        image: req.file ? `/uploads/products/${req.file.filename}` : null,
         productType: TYPE_MAP[d.product_type] || "SIMPLE",
         categoryId: d.category_id || null,
         brandId: d.brand_id || null,
@@ -173,7 +174,21 @@ export const updateProduct = async (req, res) => {
         sku: d.sku !== undefined ? (d.sku || null) : existing.sku,
         barcode: d.barcode !== undefined ? (d.barcode || null) : existing.barcode,
         description: d.description !== undefined ? (d.description || null) : existing.description,
-        image: req.file ? req.file.path : (d.image !== undefined ? d.image : existing.image),
+        image: (() => {
+          if (req.file) {
+            if (existing.image) {
+              const old = existing.image.replace(/^\//, "");
+              if (fs.existsSync(old)) fs.unlinkSync(old);
+            }
+            return `/uploads/products/${req.file.filename}`;
+          }
+          if (d.removeImage === "true" && existing.image) {
+            const old = existing.image.replace(/^\//, "");
+            if (fs.existsSync(old)) fs.unlinkSync(old);
+            return null;
+          }
+          return existing.image;
+        })(),
         productType: d.product_type ? (TYPE_MAP[d.product_type] || "SIMPLE") : existing.productType,
         categoryId: d.category_id !== undefined ? (d.category_id || null) : existing.categoryId,
         brandId: d.brand_id !== undefined ? (d.brand_id || null) : existing.brandId,
@@ -220,9 +235,14 @@ export const deleteProduct = async (req, res) => {
 
     if (!existing) return res.status(404).json({ message: "Product not found" });
 
+    if (existing.image) {
+      const filePath = existing.image.replace(/^\//, "");
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
     await prisma.product.update({
       where: { id: req.params.id },
-      data: { isActive: false },
+      data: { isActive: false, image: null },
     });
 
     logAudit({ tenantId, userId: req.user.id, module: "products", action: "delete", recordId: req.params.id, req });

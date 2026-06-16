@@ -70,23 +70,25 @@ function TrialBanner() {
   );
 }
 
-const MainLayout = ({ children }) => {
+const MainLayout = ({ children, forceSidebarClosed = false }) => {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "dark");
   const [navMode, setNavMode] = useState(localStorage.getItem("navMode") || "vertical");
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
+  const [sidebarOpen, setSidebarOpen] = useState(forceSidebarClosed ? false : window.innerWidth >= 1024);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
+      if (forceSidebarClosed) return;
       if (!mobile) setSidebarOpen(true);
       else setSidebarOpen(false);
     };
+    if (forceSidebarClosed) setSidebarOpen(false);
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  }, [forceSidebarClosed]);
 
   const closeSidebar = () => setSidebarOpen(false);
 

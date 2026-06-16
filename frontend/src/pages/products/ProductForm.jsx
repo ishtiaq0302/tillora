@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Upload, X } from "lucide-react";
 import MainLayout from "../../layout/MainLayout";
 import Button from "../component/Button";
 import toast from "react-hot-toast";
@@ -8,6 +8,8 @@ import productService from "../../services/productService";
 import masterService from "../../services/masterService";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
+
+const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
 
 const EMPTY = {
   name: "",
@@ -66,6 +68,12 @@ export default function ProductForm() {
   const [newVariants, setNewVariants] = useState([{ ...EMPTY_VARIANT }]);
   const [deletingVariantId, setDeletingVariantId] = useState(null);
 
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [existingImage, setExistingImage] = useState(null);
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const fileRef = useRef();
+
   useEffect(() => {
     Promise.all([
       masterService.getAll("categories"),
@@ -111,6 +119,10 @@ export default function ProductForm() {
           is_global: p.is_global ?? true,
           store_id: p.store_id || "",
         });
+        if (p.image) {
+          setImagePreview(`${SERVER_URL}${p.image}`);
+          setExistingImage(p.image);
+        }
         if (p.product_type === "variant") {
           masterService
             .getAll("product-variants", { product_id: id })
@@ -163,6 +175,30 @@ export default function ProductForm() {
     }
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setErrors((p) => ({ ...p, image: "Only JPG, PNG or WEBP allowed" }));
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setErrors((p) => ({ ...p, image: "Image must be under 2MB" }));
+      return;
+    }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setImageRemoved(false);
+    setErrors((p) => ({ ...p, image: undefined }));
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileRef.current) fileRef.current.value = "";
+    if (isEdit && existingImage) setImageRemoved(true);
+  };
+
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = t("product_name_required", "product_form");
@@ -189,30 +225,37 @@ export default function ProductForm() {
     if (Object.keys(errs).length) return setErrors(errs);
     setSaving(true);
     try {
-      const payload = {
-        ...form,
-        cost_price: form.cost_price === "" ? 0 : Number(form.cost_price),
-        selling_price: Number(form.selling_price),
-        stock_quantity:
-          form.stock_quantity === "" ? 0 : Number(form.stock_quantity),
-        stock_alert_quantity:
-          form.stock_alert_quantity === ""
-            ? 0
-            : Number(form.stock_alert_quantity),
-        category_id: form.category_id || null,
-        brand_id: form.brand_id || null,
-        unit_id: form.unit_id || null,
-        tax_id: form.tax_id || null,
-        is_global: form.is_global,
-        store_id: form.is_global ? null : form.store_id || null,
-      };
+      const fd = new FormData();
+      fd.append("name", form.name);
+      fd.append("sku", form.sku || "");
+      fd.append("barcode", form.barcode || "");
+      fd.append("description", form.description || "");
+      fd.append("product_type", form.product_type);
+      fd.append("category_id", form.category_id || "");
+      fd.append("brand_id", form.brand_id || "");
+      fd.append("unit_id", form.unit_id || "");
+      fd.append("tax_id", form.tax_id || "");
+      fd.append("cost_price", form.cost_price === "" ? 0 : Number(form.cost_price));
+      fd.append("selling_price", Number(form.selling_price));
+      fd.append("stock_quantity", form.stock_quantity === "" ? 0 : Number(form.stock_quantity));
+      fd.append("stock_alert_quantity", form.stock_alert_quantity === "" ? 0 : Number(form.stock_alert_quantity));
+      fd.append("has_expiry", form.has_expiry);
+      fd.append("has_batch", form.has_batch);
+      fd.append("is_active", form.is_active);
+      fd.append("is_global", form.is_global);
+      fd.append("store_id", form.is_global ? "" : form.store_id || "");
+      if (imageFile) {
+        fd.append("image", imageFile);
+      } else if (isEdit && imageRemoved) {
+        fd.append("removeImage", "true");
+      }
 
       let productId = id;
       if (isEdit) {
-        await productService.update(id, payload);
+        await productService.update(id, fd);
         toast.success("Product updated");
       } else {
-        const res = await productService.create(payload);
+        const res = await productService.create(fd);
         productId = res.data?.id;
         toast.success("Product created");
       }
@@ -307,6 +350,96 @@ export default function ProductForm() {
             >
               {t("basic_info", "product_form")}
             </p>
+          </div>
+
+          {/* PRODUCT IMAGE */}
+          <div className="col-span-1 sm:col-span-2 lg:col-span-3">
+            <label
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                color: "var(--tx2)",
+                display: "block",
+                marginBottom: 6,
+              }}
+            >
+              Product Image
+            </label>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: "var(--r2)",
+                  border: `1px dashed ${errors.image ? "var(--red)" : "var(--bd2)"}`,
+                  background: "var(--bg3)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                  position: "relative",
+                }}
+              >
+                {imagePreview ? (
+                  <>
+                    <img
+                      src={imagePreview}
+                      alt="Product"
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      style={{
+                        position: "absolute",
+                        top: 2,
+                        right: 2,
+                        width: 16,
+                        height: 16,
+                        borderRadius: "50%",
+                        background: "var(--red)",
+                        border: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <X size={9} color="white" />
+                    </button>
+                  </>
+                ) : (
+                  <Upload size={22} style={{ color: "var(--tx3)" }} />
+                )}
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className="btn btn-g"
+                  style={{ fontSize: 12, marginBottom: 4 }}
+                >
+                  <Upload size={12} />
+                  {imagePreview ? "Change Image" : "Upload Image"}
+                </button>
+                <p style={{ fontSize: 10.5, color: "var(--tx3)" }}>
+                  JPG, PNG or WEBP — max 2 MB
+                </p>
+                {errors.image && (
+                  <p style={{ fontSize: 10.5, color: "var(--red)", marginTop: 2 }}>
+                    {errors.image}
+                  </p>
+                )}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageChange}
+                style={{ display: "none" }}
+              />
+            </div>
           </div>
 
           <div className="fg col-span-1 sm:col-span-2">

@@ -5,6 +5,8 @@ import { useLanguage } from "../context/LanguageContext";
 import toast from "react-hot-toast";
 import { saveSetting, getSettings } from "../services/settingsService";
 
+const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
+
 const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
   const { user, logout, currentStore, switchStore, canViewAllStores } = useAuth();
   const { t, currentLang, setLanguage, languages } = useLanguage();
@@ -12,6 +14,7 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
   const [profileOpen, setProfileOpen] = useState(false);
   const [storeOpen, setStoreOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
 
   const settingsBtnRef = useRef(null);
   const settingsPanelRef = useRef(null);
@@ -25,9 +28,11 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
   const loadSettings = async (storeId = null) => {
     try {
       const data = await getSettings(storeId);
-      const list = Array.isArray(data) ? data : (data?.data || []);
+      const list = Array.isArray(data) ? data : data?.data || [];
       const map = {};
-      list.forEach((s) => { map[s.key] = s.value; });
+      list.forEach((s) => {
+        map[s.key] = s.value;
+      });
       if (map.theme) {
         setTheme(map.theme);
         localStorage.setItem("theme", map.theme);
@@ -46,6 +51,7 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
 
   useEffect(() => {
     loadSettings(currentStore?.id || null);
+    setLogoError(false);
   }, [currentStore?.id]);
 
   useEffect(() => {
@@ -60,20 +66,10 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
   // =====================
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (
-        settingsOpen &&
-        settingsBtnRef.current &&
-        !settingsBtnRef.current.contains(e.target) &&
-        settingsPanelRef.current &&
-        !settingsPanelRef.current.contains(e.target)
-      )
-        setSettingsOpen(false);
-      if (profileRef.current && !profileRef.current.contains(e.target))
-        setProfileOpen(false);
-      if (storeSwitcherRef.current && !storeSwitcherRef.current.contains(e.target))
-        setStoreOpen(false);
-      if (langRef.current && !langRef.current.contains(e.target))
-        setLangOpen(false);
+      if (settingsOpen && settingsBtnRef.current && !settingsBtnRef.current.contains(e.target) && settingsPanelRef.current && !settingsPanelRef.current.contains(e.target)) setSettingsOpen(false);
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
+      if (storeSwitcherRef.current && !storeSwitcherRef.current.contains(e.target)) setStoreOpen(false);
+      if (langRef.current && !langRef.current.contains(e.target)) setLangOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -156,12 +152,9 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
 
   const handleLogout = () => logout();
 
-  const getInitials = (u) =>
-    ((u?.firstName?.[0] || "") + (u?.lastName?.[0] || "")).toUpperCase();
+  const getInitials = (u) => ((u?.firstName?.[0] || "") + (u?.lastName?.[0] || "")).toUpperCase();
 
-  const stores = [...(user?.stores || [])].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
+  const stores = [...(user?.stores || [])].sort((a, b) => a.name.localeCompare(b.name));
 
   const activeLang = languages.find((l) => l.code === currentLang);
 
@@ -185,14 +178,20 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
 
       {/* ── LOGO ── */}
       <div className="logo">
-        <div className="logo-ic">
-          <svg viewBox="0 0 24 24" fill="white">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-          </svg>
-        </div>
-        <div className="logo-tx hidden sm:block">
-          {user?.tenant?.businessName}
-        </div>
+        {currentStore?.logo && !logoError ? (
+          <div></div>
+        ) : (
+          <div className="logo-ic">
+            <svg viewBox="0 0 24 24" fill="white">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          </div>
+        )}
+        {currentStore?.logo && !logoError ? (
+          <img src={`${SERVER_URL}${currentStore.logo}`} alt={currentStore.name} className="hidden sm:block" style={{ height: 28, maxWidth: 120, objectFit: "contain" }} onError={() => setLogoError(true)} />
+        ) : (
+          <div className="logo-tx hidden sm:block">{user?.tenant?.businessName}</div>
+        )}
       </div>
 
       {/* ── SEARCH ── */}
@@ -211,37 +210,47 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
         {/* ── STORE SWITCHER ── */}
         {stores.length > 0 && (
           <div style={{ position: "relative" }} ref={storeSwitcherRef}>
-            <div
-              className={`hbtn ${storeOpen ? "active-btn" : ""}`}
-              onClick={toggleStore}
-              title={t("switch_store", "header")}
-              style={{ width: "auto", padding: "0 8px", gap: 6, maxWidth: 160 }}
-            >
+            <div className={`hbtn ${storeOpen ? "active-btn" : ""}`} onClick={toggleStore} title={t("switch_store", "header")} style={{ width: "auto", padding: "0 8px", gap: 6, maxWidth: 160 }}>
               <span
                 className="hidden sm:block"
                 style={{
-                  fontSize: 12, fontWeight: 500, color: "var(--tx)",
-                  overflow: "hidden", textOverflow: "ellipsis",
-                  whiteSpace: "nowrap", maxWidth: 110, fontFamily: "var(--font)",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: "var(--tx)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  maxWidth: 110,
+                  fontFamily: "var(--font)",
                 }}
               >
-                {currentStore?.id == null && currentStore
-                  ? t("all_stores", "header")
-                  : (currentStore?.name || t("switch_store", "header"))}
+                {currentStore?.id == null && currentStore ? t("all_stores", "header") : currentStore?.name || t("switch_store", "header")}
               </span>
               <svg
                 viewBox="0 0 24 24"
                 className="block sm:hidden"
-                style={{ width: 14, height: 14, stroke: "var(--tx2)", fill: "none", strokeWidth: 1.8, strokeLinecap: "round" }}
+                style={{
+                  width: 14,
+                  height: 14,
+                  stroke: "var(--tx2)",
+                  fill: "none",
+                  strokeWidth: 1.8,
+                  strokeLinecap: "round",
+                }}
               >
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               </svg>
               <svg
                 viewBox="0 0 24 24"
                 style={{
-                  width: 11, height: 11, flexShrink: 0,
-                  stroke: "var(--tx3)", fill: "none", strokeWidth: 2.5,
-                  strokeLinecap: "round", strokeLinejoin: "round",
+                  width: 11,
+                  height: 11,
+                  flexShrink: 0,
+                  stroke: "var(--tx3)",
+                  fill: "none",
+                  strokeWidth: 2.5,
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
                   transition: "transform 0.2s",
                   transform: storeOpen ? "rotate(180deg)" : "rotate(0deg)",
                 }}
@@ -253,57 +262,116 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
             {storeOpen && (
               <div
                 className="settings-panel open"
-                style={{ right: 0, left: "auto", minWidth: 200, maxWidth: 260, padding: "6px 0" }}
+                style={{
+                  right: 0,
+                  left: "auto",
+                  minWidth: 200,
+                  maxWidth: 260,
+                  padding: "6px 0",
+                }}
               >
                 <div className="sp-title" style={{ padding: "4px 12px 8px", marginBottom: 0 }}>
                   {t("switch_store", "header")}
                 </div>
                 <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                  {canViewAllStores && (() => {
-                    const isActive = currentStore?.id == null;
-                    return (
-                      <div
-                        onClick={() => handleStoreSwitch(ALL_STORES)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 9,
-                          padding: "7px 12px", cursor: "pointer",
-                          background: isActive ? "var(--abg)" : "transparent",
-                          transition: "background 0.15s", fontSize: 12.5,
-                          color: isActive ? "var(--accent)" : "var(--tx)",
-                          fontFamily: "var(--font)", fontWeight: isActive ? 600 : 400,
-                          borderBottom: "1px solid var(--bd)", marginBottom: 2,
-                        }}
-                        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg3)"; }}
-                        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
-                      >
-                        <div style={{
-                          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-                          background: isActive ? "var(--accent)" : "var(--inp)",
-                          border: "1px solid var(--inpbd)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                          <svg viewBox="0 0 24 24" style={{ width: 13, height: 13, stroke: isActive ? "#fff" : "var(--tx2)", fill: "none", strokeWidth: 2, strokeLinecap: "round" }}>
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="2" y1="12" x2="22" y2="12" />
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                          </svg>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {t("all_stores", "header")}
+                  {canViewAllStores &&
+                    (() => {
+                      const isActive = currentStore?.id == null;
+                      return (
+                        <div
+                          onClick={() => handleStoreSwitch(ALL_STORES)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 9,
+                            padding: "7px 12px",
+                            cursor: "pointer",
+                            background: isActive ? "var(--abg)" : "transparent",
+                            transition: "background 0.15s",
+                            fontSize: 12.5,
+                            color: isActive ? "var(--accent)" : "var(--tx)",
+                            fontFamily: "var(--font)",
+                            fontWeight: isActive ? 600 : 400,
+                            borderBottom: "1px solid var(--bd)",
+                            marginBottom: 2,
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isActive) e.currentTarget.style.background = "var(--bg3)";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isActive) e.currentTarget.style.background = "transparent";
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: 6,
+                              flexShrink: 0,
+                              background: isActive ? "var(--accent)" : "var(--inp)",
+                              border: "1px solid var(--inpbd)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              style={{
+                                width: 13,
+                                height: 13,
+                                stroke: isActive ? "#fff" : "var(--tx2)",
+                                fill: "none",
+                                strokeWidth: 2,
+                                strokeLinecap: "round",
+                              }}
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="2" y1="12" x2="22" y2="12" />
+                              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                            </svg>
                           </div>
-                          <div style={{ fontSize: 10.5, color: "var(--tx3)", marginTop: 1, fontWeight: 400 }}>
-                            {t("view_all_stores", "header")}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {t("all_stores", "header")}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 10.5,
+                                color: "var(--tx3)",
+                                marginTop: 1,
+                                fontWeight: 400,
+                              }}
+                            >
+                              {t("view_all_stores", "header")}
+                            </div>
                           </div>
+                          {isActive && (
+                            <svg
+                              viewBox="0 0 24 24"
+                              style={{
+                                width: 13,
+                                height: 13,
+                                flexShrink: 0,
+                                stroke: "var(--accent)",
+                                fill: "none",
+                                strokeWidth: 2.5,
+                                strokeLinecap: "round",
+                                strokeLinejoin: "round",
+                              }}
+                            >
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
                         </div>
-                        {isActive && (
-                          <svg viewBox="0 0 24 24" style={{ width: 13, height: 13, flexShrink: 0, stroke: "var(--accent)", fill: "none", strokeWidth: 2.5, strokeLinecap: "round", strokeLinejoin: "round" }}>
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        )}
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
 
                   {stores.map((store) => {
                     const isActive = store.id === currentStore?.id;
@@ -312,34 +380,81 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
                         key={store.id}
                         onClick={() => handleStoreSwitch(store)}
                         style={{
-                          display: "flex", alignItems: "center", gap: 9,
-                          padding: "7px 12px", cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 9,
+                          padding: "7px 12px",
+                          cursor: "pointer",
                           background: isActive ? "var(--abg)" : "transparent",
-                          transition: "background 0.15s", fontSize: 12.5,
+                          transition: "background 0.15s",
+                          fontSize: 12.5,
                           color: isActive ? "var(--accent)" : "var(--tx)",
-                          fontFamily: "var(--font)", fontWeight: isActive ? 600 : 400,
+                          fontFamily: "var(--font)",
+                          fontWeight: isActive ? 600 : 400,
                         }}
-                        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg3)"; }}
-                        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                        onMouseEnter={(e) => {
+                          if (!isActive) e.currentTarget.style.background = "var(--bg3)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive) e.currentTarget.style.background = "transparent";
+                        }}
                       >
-                        <div style={{
-                          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
-                          background: isActive ? "var(--accent)" : "var(--inp)",
-                          border: "1px solid var(--inpbd)",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 10, fontWeight: 700,
-                          color: isActive ? "#fff" : "var(--tx2)", letterSpacing: 0.3,
-                        }}>
+                        <div
+                          style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: 6,
+                            flexShrink: 0,
+                            background: isActive ? "var(--accent)" : "var(--inp)",
+                            border: "1px solid var(--inpbd)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: isActive ? "#fff" : "var(--tx2)",
+                            letterSpacing: 0.3,
+                          }}
+                        >
                           {store.name?.slice(0, 2).toUpperCase()}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{store.name}</div>
+                          <div
+                            style={{
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {store.name}
+                          </div>
                           {store.code && (
-                            <div style={{ fontSize: 10.5, color: "var(--tx3)", marginTop: 1, fontWeight: 400 }}>{store.code}</div>
+                            <div
+                              style={{
+                                fontSize: 10.5,
+                                color: "var(--tx3)",
+                                marginTop: 1,
+                                fontWeight: 400,
+                              }}
+                            >
+                              {store.code}
+                            </div>
                           )}
                         </div>
                         {isActive && (
-                          <svg viewBox="0 0 24 24" style={{ width: 13, height: 13, flexShrink: 0, stroke: "var(--accent)", fill: "none", strokeWidth: 2.5, strokeLinecap: "round", strokeLinejoin: "round" }}>
+                          <svg
+                            viewBox="0 0 24 24"
+                            style={{
+                              width: 13,
+                              height: 13,
+                              flexShrink: 0,
+                              stroke: "var(--accent)",
+                              fill: "none",
+                              strokeWidth: 2.5,
+                              strokeLinecap: "round",
+                              strokeLinejoin: "round",
+                            }}
+                          >
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
                         )}
@@ -347,9 +462,17 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
                     );
                   })}
                 </div>
-                <div style={{ padding: "6px 12px 2px", fontSize: 10.5, color: "var(--tx3)", borderTop: "1px solid var(--bd)", marginTop: 4, fontFamily: "var(--font)" }}>
-                  {stores.length}{" "}
-                  {stores.length !== 1 ? t("stores_available", "header") : t("store_available", "header")}
+                <div
+                  style={{
+                    padding: "6px 12px 2px",
+                    fontSize: 10.5,
+                    color: "var(--tx3)",
+                    borderTop: "1px solid var(--bd)",
+                    marginTop: 4,
+                    fontFamily: "var(--font)",
+                  }}
+                >
+                  {stores.length} {stores.length !== 1 ? t("stores_available", "header") : t("store_available", "header")}
                 </div>
               </div>
             )}
@@ -361,55 +484,127 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
         {/* ── LANGUAGE SELECTOR ── */}
         {languages.length > 0 && (
           <div style={{ position: "relative" }} ref={langRef}>
-            <div
-              className={`hbtn ${langOpen ? "active-btn" : ""}`}
-              onClick={toggleLang}
-              title={t("language", "header")}
-              style={{ width: "auto", padding: "0 8px", gap: 4, minWidth: 32 }}
-            >
-              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--tx2)", fontFamily: "var(--font)", letterSpacing: 0.3, textTransform: "uppercase" }}>
+            <div className={`hbtn ${langOpen ? "active-btn" : ""}`} onClick={toggleLang} title={t("language", "header")} style={{ width: "auto", padding: "0 8px", gap: 4, minWidth: 32 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "var(--tx2)",
+                  fontFamily: "var(--font)",
+                  letterSpacing: 0.3,
+                  textTransform: "uppercase",
+                }}
+              >
                 {activeLang?.code || currentLang}
               </span>
-              <svg viewBox="0 0 24 24" style={{ width: 11, height: 11, flexShrink: 0, stroke: "var(--tx3)", fill: "none", strokeWidth: 2.5, strokeLinecap: "round", strokeLinejoin: "round", transition: "transform 0.2s", transform: langOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+              <svg
+                viewBox="0 0 24 24"
+                style={{
+                  width: 11,
+                  height: 11,
+                  flexShrink: 0,
+                  stroke: "var(--tx3)",
+                  fill: "none",
+                  strokeWidth: 2.5,
+                  strokeLinecap: "round",
+                  strokeLinejoin: "round",
+                  transition: "transform 0.2s",
+                  transform: langOpen ? "rotate(180deg)" : "rotate(0deg)",
+                }}
+              >
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </div>
 
             {langOpen && (
-              <div className="settings-panel open" style={{ right: 0, left: "auto", minWidth: 170, padding: "6px 0" }}>
+              <div
+                className="settings-panel open"
+                style={{
+                  right: 0,
+                  left: "auto",
+                  minWidth: 170,
+                  padding: "6px 0",
+                }}
+              >
                 <div className="sp-title" style={{ padding: "4px 12px 8px", marginBottom: 0 }}>
                   {t("language", "header")}
                 </div>
                 <div style={{ maxHeight: 240, overflowY: "auto" }}>
                   {/* English always available as base */}
-                  {[{ code: "en", name: "English", native_name: "English", is_rtl: false }, ...languages.filter((l) => l.code !== "en" && l.is_active !== false)].map((lang) => {
+                  {[
+                    {
+                      code: "en",
+                      name: "English",
+                      native_name: "English",
+                      is_rtl: false,
+                    },
+                    ...languages.filter((l) => l.code !== "en" && l.is_active !== false),
+                  ].map((lang) => {
                     const isActive = currentLang === lang.code;
                     return (
                       <div
                         key={lang.code}
                         onClick={() => handleLangChange(lang.code)}
                         style={{
-                          display: "flex", alignItems: "center", gap: 8,
-                          padding: "6px 12px", cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          cursor: "pointer",
                           background: isActive ? "var(--abg)" : "transparent",
-                          transition: "background 0.15s", fontSize: 12.5,
+                          transition: "background 0.15s",
+                          fontSize: 12.5,
                           color: isActive ? "var(--accent)" : "var(--tx)",
-                          fontFamily: "var(--font)", fontWeight: isActive ? 600 : 400,
+                          fontFamily: "var(--font)",
+                          fontWeight: isActive ? 600 : 400,
                         }}
-                        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "var(--bg3)"; }}
-                        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                        onMouseEnter={(e) => {
+                          if (!isActive) e.currentTarget.style.background = "var(--bg3)";
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isActive) e.currentTarget.style.background = "transparent";
+                        }}
                       >
-                        <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: isActive ? "var(--accent)" : "var(--tx3)", minWidth: 24 }}>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            letterSpacing: 0.4,
+                            color: isActive ? "var(--accent)" : "var(--tx3)",
+                            minWidth: 24,
+                          }}
+                        >
                           {lang.code}
                         </span>
                         <div style={{ flex: 1 }}>
                           <div>{lang.name}</div>
                           {lang.native_name && lang.native_name !== lang.name && (
-                            <div style={{ fontSize: 10.5, color: "var(--tx3)", marginTop: 1 }}>{lang.native_name}</div>
+                            <div
+                              style={{
+                                fontSize: 10.5,
+                                color: "var(--tx3)",
+                                marginTop: 1,
+                              }}
+                            >
+                              {lang.native_name}
+                            </div>
                           )}
                         </div>
                         {isActive && (
-                          <svg viewBox="0 0 24 24" style={{ width: 12, height: 12, flexShrink: 0, stroke: "var(--accent)", fill: "none", strokeWidth: 2.5, strokeLinecap: "round", strokeLinejoin: "round" }}>
+                          <svg
+                            viewBox="0 0 24 24"
+                            style={{
+                              width: 12,
+                              height: 12,
+                              flexShrink: 0,
+                              stroke: "var(--accent)",
+                              fill: "none",
+                              strokeWidth: 2.5,
+                              strokeLinecap: "round",
+                              strokeLinejoin: "round",
+                            }}
+                          >
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
                         )}
@@ -426,12 +621,7 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
 
         {/* ── SETTINGS ── */}
         <div style={{ position: "relative" }}>
-          <div
-            ref={settingsBtnRef}
-            className={`hbtn ${settingsOpen ? "active-btn" : ""}`}
-            onClick={toggleSettings}
-            title={t("appearance_settings", "header")}
-          >
+          <div ref={settingsBtnRef} className={`hbtn ${settingsOpen ? "active-btn" : ""}`} onClick={toggleSettings} title={t("appearance_settings", "header")}>
             <svg viewBox="0 0 24 24">
               <path d="M12 8a4 4 0 100 8 4 4 0 000-8z" />
               <path d="M4 12h2m12 0h2M12 4v2m0 12v2M6.34 6.34l1.42 1.42m8.48 8.48l1.42 1.42M6.34 17.66l1.42-1.42m8.48-8.48l1.42-1.42" />
@@ -447,16 +637,38 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
                 <div className="sp-lbl">{t("color_theme", "header")}</div>
                 <div className="sp-opts">
                   {[
-                    { key: "dark", icon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />, label: t("dark", "header") },
+                    {
+                      key: "dark",
+                      icon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />,
+                      label: t("dark", "header"),
+                    },
                     {
                       key: "light",
-                      icon: (<><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></>),
+                      icon: (
+                        <>
+                          <circle cx="12" cy="12" r="5" />
+                          <line x1="12" y1="1" x2="12" y2="3" />
+                          <line x1="12" y1="21" x2="12" y2="23" />
+                          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                          <line x1="1" y1="12" x2="3" y2="12" />
+                          <line x1="21" y1="12" x2="23" y2="12" />
+                          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                        </>
+                      ),
                       label: t("light", "header"),
                     },
-                    { key: "blue", icon: <path d="M12 2L2 12h4v8h12v-8h4z" />, label: t("blue", "header") },
+                    {
+                      key: "blue",
+                      icon: <path d="M12 2L2 12h4v8h12v-8h4z" />,
+                      label: t("blue", "header"),
+                    },
                   ].map(({ key, icon, label }) => (
                     <div key={key} className={`sp-opt ${theme === key ? "active" : ""}`} onClick={() => handleThemeChange(key)}>
-                      <div className="sp-opt-ic"><svg viewBox="0 0 24 24">{icon}</svg></div>
+                      <div className="sp-opt-ic">
+                        <svg viewBox="0 0 24 24">{icon}</svg>
+                      </div>
                       <div className="sp-opt-lb">{label}</div>
                     </div>
                   ))}
@@ -495,9 +707,7 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
                     <div className="sp-opt-lb">{t("horizontal", "header")}</div>
                   </div>
                 </div>
-                <div className="sp-hint">
-                  {navMode === "vertical" ? t("sidebar_hint", "header") : t("topbar_hint", "header")}
-                </div>
+                <div className="sp-hint">{navMode === "vertical" ? t("sidebar_hint", "header") : t("topbar_hint", "header")}</div>
               </div>
             </div>
           )}
@@ -506,17 +716,11 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
         <div className="dvd" />
 
         {/* ── PROFILE ── */}
-        <div
-          ref={profileRef}
-          className={`profile-trigger ${profileOpen ? "open" : ""}`}
-          onClick={toggleProfile}
-        >
+        <div ref={profileRef} className={`profile-trigger ${profileOpen ? "open" : ""}`} onClick={toggleProfile}>
           <div className="av">{getInitials(user)}</div>
 
           <div className="uinf hidden sm:flex">
-            <span className="uname">
-              {user ? `${user.firstName} ${user.lastName || ""}` : "Super Admin"}
-            </span>
+            <span className="uname">{user ? `${user.firstName} ${user.lastName || ""}` : "Super Admin"}</span>
             <span className="urole">{user?.roles?.[0]}</span>
           </div>
 
@@ -529,9 +733,7 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
               <div className="pd-header">
                 <div className="pd-av">{getInitials(user)}</div>
                 <div>
-                  <div className="pd-name">
-                    {user ? `${user.firstName} ${user.lastName || ""}` : "Super Admin"}
-                  </div>
+                  <div className="pd-name">{user ? `${user.firstName} ${user.lastName || ""}` : "Super Admin"}</div>
                   <div className="pd-email">{user ? user.email : "super@admin.com"}</div>
                   <span className="pd-badge">{user?.roles?.[0]}</span>
                 </div>

@@ -7,11 +7,19 @@ const productService = {
   getById: (id) =>
     api.get(`/products/${id}`),
 
-  create: (data) =>
-    api.post("/products", data),
+  create: (data) => {
+    if (data instanceof FormData) {
+      return api.post("/products", data, { headers: { "Content-Type": "multipart/form-data" } });
+    }
+    return api.post("/products", data);
+  },
 
-  update: (id, data) =>
-    api.put(`/products/${id}`, data),
+  update: (id, data) => {
+    if (data instanceof FormData) {
+      return api.put(`/products/${id}`, data, { headers: { "Content-Type": "multipart/form-data" } });
+    }
+    return api.put(`/products/${id}`, data);
+  },
 
   delete: (id) =>
     api.delete(`/products/${id}`),
