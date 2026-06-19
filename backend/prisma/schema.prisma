@@ -43,6 +43,8 @@ model Tenant {
   updatedAt          DateTime          @updatedAt
   attributes         Attribute[]
   auditLogs          AuditLog[]
+  productVariants    ProductVariant[]
+  variants           Variant[]
   brands             Brand[]
   cashRegisters      CashRegister[]
   categories         Category[]
@@ -99,6 +101,7 @@ model Store {
   storeProductAttributeValues ProductAttributeValue[]
   storeProductBatches         ProductBatch[]
   storeProductVariants        ProductVariant[]
+  storeVariants               Variant[]
   purchases                   Purchase[]
   restaurantTables            RestaurantTable[]
   sales                       Sale[]
@@ -308,6 +311,7 @@ model Product {
   updatedAt          DateTime                @updatedAt
   stockQuantity      Decimal                 @default(0)
   stockAlertQuantity Decimal                 @default(0)
+  allowMultiOptions  Boolean                 @default(false)
   productAttributes  ProductAttributeValue[]
   batches            ProductBatch[]
   translations       ProductTranslation[]
@@ -349,23 +353,44 @@ model StoreProduct {
 }
 
 model ProductVariant {
-  id            String     @id @default(uuid()) @db.Uuid
-  productId     String     @db.Uuid
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  productId     String?  @db.Uuid
   variantName   String
   sku           String?
   barcode       String?
-  costPrice     Decimal    @default(0)
-  sellingPrice  Decimal    @default(0)
-  stockQuantity Decimal    @default(0)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  storeId       String?    @db.Uuid
-  product       Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  store         Store?     @relation(fields: [storeId], references: [id])
+  costPrice     Decimal  @default(0)
+  sellingPrice  Decimal  @default(0)
+  stockQuantity Decimal  @default(0)
+  multiSelect   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  storeId       String?  @db.Uuid
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product       Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store         Store?         @relation(fields: [storeId], references: [id])
   saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
 
+  @@index([tenantId])
   @@index([productId])
   @@map("product_variants")
+}
+
+model Variant {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  storeId     String?  @db.Uuid
+  name        String
+  multiSelect Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store       Store?   @relation(fields: [storeId], references: [id])
+
+  @@index([tenantId])
+  @@map("variants")
 }
 
 model ProductBatch {
@@ -419,6 +444,7 @@ model SaleItem {
   saleId           String          @db.Uuid
   productId        String?         @db.Uuid
   productVariantId String?         @db.Uuid
+  variantIds       Json?
   quantity         Decimal         @default(1)
   price            Decimal         @default(0)
   discount         Decimal         @default(0)
@@ -461,17 +487,19 @@ model Purchase {
 }
 
 model PurchaseItem {
-  id         String   @id @default(uuid()) @db.Uuid
-  purchaseId String   @db.Uuid
-  productId  String?  @db.Uuid
-  quantity   Decimal  @default(1)
-  costPrice  Decimal  @default(0)
-  tax        Decimal  @default(0)
-  discount   Decimal  @default(0)
-  total      Decimal  @default(0)
-  createdAt  DateTime @default(now())
-  product    Product? @relation(fields: [productId], references: [id])
-  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  id               String          @id @default(uuid()) @db.Uuid
+  purchaseId       String          @db.Uuid
+  productId        String?         @db.Uuid
+  productVariantId String?         @db.Uuid
+  quantity         Decimal         @default(1)
+  costPrice        Decimal         @default(0)
+  tax              Decimal         @default(0)
+  discount         Decimal         @default(0)
+  total            Decimal         @default(0)
+  createdAt        DateTime        @default(now())
+  product          Product?        @relation(fields: [productId], references: [id])
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  purchase         Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([purchaseId])
   @@map("purchase_items")
@@ -682,6 +710,7 @@ model Attribute {
   name              String
   createdAt         DateTime                @default(now())
   storeId           String?                 @db.Uuid
+  allowMultiSelect  Boolean                 @default(false)
   values            AttributeValue[]
   store             Store?                  @relation(fields: [storeId], references: [id])
   tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -705,13 +734,13 @@ model AttributeValue {
 
 model ProductAttributeValue {
   id               String         @id @default(uuid()) @db.Uuid
-  productId        String         @db.Uuid
+  productId        String?        @db.Uuid
   attributeId      String         @db.Uuid
   attributeValueId String         @db.Uuid
   storeId          String?        @db.Uuid
   attribute        Attribute      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
   attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
-  product          Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product          Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
   store            Store?         @relation(fields: [storeId], references: [id])
 
   @@map("product_attribute_values")

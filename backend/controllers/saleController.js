@@ -7,6 +7,7 @@ const fmtItem = (it) => ({
   product: it.product ? { id: it.product.id, name: it.product.name } : null,
   product_variant_id: it.productVariantId || null,
   product_variant: it.productVariant ? { id: it.productVariant.id, variant_name: it.productVariant.variantName } : null,
+  variant_ids: it.variantIds || null,
   quantity: Number(it.quantity),
   price: Number(it.price),
   discount: Number(it.discount),
@@ -34,6 +35,20 @@ const fmt = (s) => ({
   updated_at: s.updatedAt,
 });
 
+async function generateInvoiceNo(tx, tenantId) {
+  const last = await tx.sale.findFirst({
+    where: { tenantId, invoiceNo: { startsWith: "INV-" } },
+    orderBy: { createdAt: "desc" },
+    select: { invoiceNo: true },
+  });
+  let next = 1;
+  if (last) {
+    const num = parseInt(last.invoiceNo.split("-").pop(), 10);
+    if (!isNaN(num)) next = num + 1;
+  }
+  return `INV-${String(next).padStart(5, "0")}`;
+}
+
 export const createSale = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
@@ -57,19 +72,17 @@ export const createSale = async (req, res) => {
       items,
     } = req.body;
 
-    if (!invoice_no?.trim()) {
-      return res.status(400).json({ message: "Invoice number is required" });
-    }
     if (!items || items.length === 0) {
       return res.status(400).json({ message: "At least one item is required" });
     }
 
     const sale = await prisma.$transaction(async (tx) => {
+      const resolvedInvoiceNo = invoice_no?.trim() || (await generateInvoiceNo(tx, tenantId));
       const created = await tx.sale.create({
         data: {
           tenantId,
           storeId,
-          invoiceNo: invoice_no.trim(),
+          invoiceNo: resolvedInvoiceNo,
           customerId: customer_id || null,
           paymentStatus: payment_status || "paid",
           saleStatus: sale_status || "completed",
@@ -81,15 +94,21 @@ export const createSale = async (req, res) => {
           notes: notes || null,
           createdBy: req.user.id || null,
           items: {
-            create: items.map((it) => ({
-              productId: it.product_id || null,
-              productVariantId: it.product_variant_id || null,
-              quantity: Number(it.quantity || 1),
-              price: Number(it.price || 0),
-              discount: Number(it.discount || 0),
-              tax: Number(it.tax || 0),
-              total: Number(it.total || 0),
-            })),
+            create: items.map((it) => {
+              const ids = Array.isArray(it.variant_ids) && it.variant_ids.length > 0 ? it.variant_ids : null;
+              // single variant: keep FK; multi-variant combo: store array only
+              const singleId = !ids && it.product_variant_id ? it.product_variant_id : null;
+              return {
+                productId: it.product_id || null,
+                productVariantId: singleId,
+                variantIds: ids,
+                quantity: Number(it.quantity || 1),
+                price: Number(it.price || 0),
+                discount: Number(it.discount || 0),
+                tax: Number(it.tax || 0),
+                total: Number(it.total || 0),
+              };
+            }),
           },
         },
         include: {

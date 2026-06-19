@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Search, Plus, Minus, Trash2, X, Layers, Tag, ChevronUp, Banknote, CreditCard, Smartphone, MoreHorizontal, User, ArrowRight, Pause, RotateCcw, ShoppingCart } from "lucide-react";
+import { Search, Plus, Minus, Trash2, X, Layers, Tag, ChevronUp, Banknote, CreditCard, Smartphone, MoreHorizontal, User, ArrowRight, Pause, RotateCcw, ShoppingCart, SlidersHorizontal } from "lucide-react";
 import MainLayout from "../../layout/MainLayout";
 import toast from "react-hot-toast";
 import productService from "../../services/productService";
@@ -19,34 +19,170 @@ function useWindowWidth() {
   return width;
 }
 
-function VariantModal({ product, variants, onSelect, onClose }) {
+// storeAttributes: { attrId: { id, name, allow_multi_select, values: [{id, value}] } }
+function ProductSelectionModal({ product, variants, storeAttributes, onSelect, onClose }) {
+  const [selectedOptions, setSelectedOptions] = useState({});
+  const [checkedVariantIds, setCheckedVariantIds] = useState(new Set());
+  const [selectedVariantId, setSelectedVariantId] = useState(null);
+
   if (!product) return null;
+
+  const attrEntries = Object.entries(storeAttributes || {});
+  const hasAttrs = attrEntries.length > 0;
+
+  // Split variants by their multi_select flag
+  const multiSelectVariants = variants.filter((v) => v.multi_select);
+  const singleSelectVariants = variants.filter((v) => !v.multi_select);
+  const hasMultiVariants = multiSelectVariants.length > 0;
+  const hasSingleVariants = singleSelectVariants.length > 0;
+  const hasVariants = variants.length > 0;
+
+  const toggleMultiVariant = (variantId) => {
+    setCheckedVariantIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(variantId)) next.delete(variantId);
+      else next.add(variantId);
+      return next;
+    });
+  };
+
+  const toggleOption = (attrId, valueId) => {
+    setSelectedOptions((prev) => {
+      const current = prev[attrId] || [];
+      const isMulti = storeAttributes[attrId]?.allow_multi_select;
+      if (isMulti) {
+        const next = current.includes(valueId) ? current.filter((v) => v !== valueId) : [...current, valueId];
+        return { ...prev, [attrId]: next };
+      }
+      return { ...prev, [attrId]: current[0] === valueId ? [] : [valueId] };
+    });
+  };
+
+  const handleAddToCart = () => {
+    const multiChecked = multiSelectVariants.filter((v) => checkedVariantIds.has(v.id));
+    const singleSelected = singleSelectVariants.find((v) => v.id === selectedVariantId);
+    const hasVariantSelections = multiChecked.length > 0 || !!singleSelected;
+
+    if (hasVariantSelections) {
+      // Combine ALL selected variants into ONE cart item
+      const allSelected = [...(singleSelected ? [singleSelected] : []), ...multiChecked];
+      const variantLabel = allSelected.map((v) => v.variant_name).join(", ");
+      const extraPrice = allSelected.reduce((sum, v) => sum + Number(v.selling_price), 0);
+      const variantIds = allSelected.map((v) => v.id);
+      const variantKey = [...variantIds].sort().join("-");
+      onSelect(product, null, variantLabel, extraPrice, variantKey, variantIds);
+      onClose();
+      return;
+    }
+
+    // Fallback: attribute-based add (no variants selected)
+    const optionsText = attrEntries
+      .map(([id, attr]) => {
+        const ids = selectedOptions[id] || [];
+        const vals = ids.map((vid) => attr.values.find((v) => v.id === vid)?.value).filter(Boolean);
+        return vals.length > 0 ? `${attr.name}: ${vals.join(", ")}` : null;
+      })
+      .filter(Boolean)
+      .join(" / ");
+    onSelect(product, null, optionsText || undefined);
+    onClose();
+  };
+
+  const anyVariantSelected = checkedVariantIds.size > 0 || !!selectedVariantId;
+  const anyAttrSelected = attrEntries.some(([id]) => (selectedOptions[id] || []).length > 0);
+
+  const subtitle = hasVariants ? "Select variants to add to cart" : hasAttrs ? "Select options (optional)" : "Add to cart";
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-2xl border border-stone-200" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
           <div>
             <p className="text-sm font-bold text-stone-800">{product.name}</p>
-            <p className="text-xs text-stone-400 mt-0.5">Select a variant</p>
+            <p className="text-xs text-stone-400 mt-0.5">{subtitle}</p>
           </div>
           <button onClick={onClose} className="w-7 h-7 rounded-lg bg-stone-100 flex items-center justify-center text-stone-500 hover:bg-stone-200 transition-colors">
             <X size={13} />
           </button>
         </div>
-        <div className="overflow-y-auto p-3 space-y-2">
-          {variants.length === 0 ? (
-            <p className="text-center text-stone-400 py-8 text-xs">No variants available</p>
-          ) : (
-            variants.map((v) => (
-              <button key={v.id} onClick={() => onSelect(product, v)} className="flex items-center justify-between w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-left hover:border-amber-400 transition-colors">
-                <div>
-                  <p className="text-sm font-semibold text-stone-800">{v.variant_name}</p>
-                  {v.stock_quantity != null && <span className={`text-[10.5px] font-semibold mt-0.5 block ${v.stock_quantity > 0 ? "text-emerald-600" : "text-red-500"}`}>{v.stock_quantity > 0 ? `${v.stock_quantity} in stock` : "Out of stock"}</span>}
-                </div>
-                <span className="text-sm font-bold text-stone-800 ml-4">{Number(v.selling_price).toLocaleString()}</span>
-              </button>
-            ))
+
+        <div className="overflow-y-auto p-4 space-y-4 flex-1">
+          {/* Multi-select variants — checkboxes, can pick many */}
+          {hasMultiVariants && (
+            <div>
+              <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2">Select Multiple</p>
+              <div className="flex flex-col gap-2">
+                {multiSelectVariants.map((v) => {
+                  const isChecked = checkedVariantIds.has(v.id);
+                  return (
+                    <label key={v.id} className={`flex items-center gap-2.5 cursor-pointer px-3 py-2.5 rounded-xl border transition-colors ${isChecked ? "bg-amber-50 border-amber-400" : "bg-stone-50 border-stone-200 hover:border-amber-300"}`}>
+                      <input type="checkbox" checked={isChecked} onChange={() => toggleMultiVariant(v.id)} className="w-4 h-4 accent-amber-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-stone-800">{v.variant_name}</p>
+                        {v.stock_quantity != null && <span className={`text-[10.5px] font-semibold ${v.stock_quantity > 0 ? "text-emerald-600" : "text-red-500"}`}>{v.stock_quantity > 0 ? `${v.stock_quantity} in stock` : "Out of stock"}</span>}
+                      </div>
+                      <span className="text-sm font-bold text-stone-800 ml-2 flex-shrink-0">{Number(v.selling_price) > 0 ? `+${Number(v.selling_price).toLocaleString()}` : "Free"}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
           )}
+
+          {/* Divider when both sections exist */}
+          {hasMultiVariants && hasSingleVariants && <hr className="border-stone-100" />}
+
+          {/* Single-select variants — radios, pick one */}
+          {hasSingleVariants && (
+            <div>
+              <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2">Select One</p>
+              <div className="flex flex-col gap-2">
+                {singleSelectVariants.map((v) => {
+                  const isSelected = selectedVariantId === v.id;
+                  return (
+                    <label key={v.id} className={`flex items-center gap-2.5 cursor-pointer px-3 py-2.5 rounded-xl border transition-colors ${isSelected ? "bg-amber-50 border-amber-400" : "bg-stone-50 border-stone-200 hover:border-amber-300"}`}>
+                      <input type="radio" name="pos_single_variant" checked={isSelected} onChange={() => setSelectedVariantId(v.id)} className="w-4 h-4 accent-amber-500 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-stone-800">{v.variant_name}</p>
+                        {v.stock_quantity != null && <span className={`text-[10.5px] font-semibold ${v.stock_quantity > 0 ? "text-emerald-600" : "text-red-500"}`}>{v.stock_quantity > 0 ? `${v.stock_quantity} in stock` : "Out of stock"}</span>}
+                      </div>
+                      <span className="text-sm font-bold text-stone-800 ml-2 flex-shrink-0">{Number(v.selling_price) > 0 ? `+${Number(v.selling_price).toLocaleString()}` : "Free"}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Divider between variants and attribute pickers */}
+          {hasVariants && hasAttrs && <hr className="border-stone-100" />}
+
+          {/* Attribute option pickers — checkboxes for multi-select, radios for single-select */}
+          {hasAttrs &&
+            attrEntries.map(([attrId, attr]) => (
+              <div key={attrId}>
+                <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2">{attr.name}</p>
+                <div className="flex flex-col gap-2">
+                  {attr.values.map((av) => {
+                    const isSelected = (selectedOptions[attrId] || []).includes(av.id);
+                    return (
+                      <label key={av.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-stone-700 font-medium">
+                        <input type={attr.allow_multi_select ? "checkbox" : "radio"} name={attr.allow_multi_select ? undefined : `pos_attr_${attrId}`} checked={isSelected} onChange={() => toggleOption(attrId, av.id)} className="w-4 h-4 accent-amber-500" />
+                        {av.value}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 pb-4 pt-2 border-t border-stone-100">
+          <button onClick={handleAddToCart} className="w-full py-3 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all">
+            {anyVariantSelected ? "Add to Cart" : anyAttrSelected ? "Add to Cart with options" : "Add to Cart"}
+          </button>
         </div>
       </div>
     </div>
@@ -57,11 +193,12 @@ export default function POS() {
   const { currentStore } = useAuth();
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 640;
-  const isTablet = windowWidth >= 640 && windowWidth < 1024;
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [variants, setVariants] = useState([]);
+  // Store-level attributes: { attrId: { id, name, allow_multi_select, values: [{id, value}] } }
+  const [storeAttributes, setStoreAttributes] = useState({});
   const [customers, setCustomers] = useState([]);
   const [stores, setStores] = useState([]);
   const [search, setSearch] = useState("");
@@ -72,7 +209,6 @@ export default function POS() {
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState("cash");
   const [saving, setSaving] = useState(false);
-  const [invoiceCounter, setInvoiceCounter] = useState(1);
   const [variantModal, setVariantModal] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [couponCode, setCouponCode] = useState("");
@@ -94,6 +230,25 @@ export default function POS() {
     masterService
       .getAll("product-variants")
       .then((r) => setVariants(r.data?.data || r.data || []))
+      .catch(() => {});
+    // Load store-level attributes (not product-specific)
+    masterService
+      .getAll("attributes")
+      .then((r) => {
+        const attrs = r.data?.data || r.data || [];
+        const grouped = {};
+        attrs.forEach((a) => {
+          if (a.values && a.values.length > 0) {
+            grouped[a.id] = {
+              id: a.id,
+              name: a.name,
+              allow_multi_select: !!a.allow_multi_select,
+              values: a.values,
+            };
+          }
+        });
+        setStoreAttributes(grouped);
+      })
       .catch(() => {});
     masterService
       .getAll("customers")
@@ -145,23 +300,41 @@ export default function POS() {
 
   const makeKey = (productId, variantId = null) => (variantId ? `${productId}-v${variantId}` : String(productId));
 
-  const addToCart = (product, variant = null) => {
-    const key = makeKey(product.id, variant?.id);
-    const name = variant ? `${product.name} — ${variant.variant_name}` : product.name;
-    const price = variant ? Number(variant.selling_price) : Number(product.selling_price);
+  const addToCart = (product, variant = null, optionsText = "", extraPrice = 0, variantKey = null, variantIds = null) => {
+    const key = variantKey
+      ? `${product.id}-variants-${variantKey}`
+      : optionsText
+        ? `${product.id}-opt-${optionsText.replace(/[\s/,]/g, "")}`
+        : makeKey(product.id, variant?.id);
+    const name = variant ? `${product.name} — ${variant.variant_name}` : optionsText ? `${product.name} — ${optionsText}` : product.name;
+    const price = Number(product.selling_price) + (variant ? Number(variant.selling_price) : 0) + extraPrice;
     const taxRate = Number(product.tax?.rate || 0);
     const image = product.image || null;
     setCart((prev) => {
       const ex = prev.find((i) => i.key === key);
       if (ex) return prev.map((i) => (i.key === key ? { ...i, quantity: i.quantity + 1 } : i));
-      return [...prev, { key, product_id: product.id, product_variant_id: variant?.id || null, name, price, taxRate, quantity: 1, image }];
+      return [
+        ...prev,
+        {
+          key,
+          product_id: product.id,
+          product_variant_id: variant?.id || null,
+          variant_ids: variantIds && variantIds.length > 0 ? variantIds : null,
+          name,
+          price,
+          taxRate,
+          quantity: 1,
+          image,
+        },
+      ];
     });
-    setVariantModal(null);
   };
 
   const handleProductClick = (product) => {
     const pv = variantsByProduct[product.id];
-    if (pv && pv.length > 0) setVariantModal(product);
+    const hasVariants = pv && pv.length > 0;
+    const hasStoreAttrs = Object.keys(storeAttributes).length > 0;
+    if (hasVariants || hasStoreAttrs) setVariantModal(product);
     else addToCart(product);
   };
 
@@ -182,7 +355,6 @@ export default function POS() {
   const totalDiscount = Number(discount) + couponDiscount;
   const grandTotal = Math.max(0, subtotal - totalDiscount + taxAmount);
   const cartItemCount = cart.reduce((s, i) => s + i.quantity, 0);
-  const invoiceNo = `POS-${String(invoiceCounter).padStart(4, "0")}`;
 
   const applyCoupon = () => {
     const c = couponCode.trim().toUpperCase();
@@ -206,8 +378,7 @@ export default function POS() {
     }
     setSaving(true);
     try {
-      await masterService.create("sales", {
-        invoice_no: invoiceNo,
+      const result = await masterService.create("sales", {
         customer_id: customerId || null,
         store_id: selectedStoreId || undefined,
         payment_status: "paid",
@@ -221,6 +392,7 @@ export default function POS() {
         items: cart.map((i) => ({
           product_id: i.product_id,
           product_variant_id: i.product_variant_id || null,
+          variant_ids: i.variant_ids || null,
           quantity: i.quantity,
           price: i.price,
           discount: 0,
@@ -228,11 +400,11 @@ export default function POS() {
           total: i.price * i.quantity,
         })),
       });
+      const invoiceNo = result?.data?.invoice_no || result?.data?.invoiceNo || "completed";
       toast.success(`Sale ${invoiceNo} completed!`);
       resetOrder();
       setCartOpen(false);
       if (!currentStore?.id) setSelectedStoreId("");
-      setInvoiceCounter((c) => c + 1);
     } catch (err) {
       toast.error(err?.response?.data?.message || "Checkout failed");
     } finally {
@@ -251,22 +423,22 @@ export default function POS() {
   const renderCard = (p) => {
     const hasVariants = (variantsByProduct[p.id] || []).length > 0;
     const variantCount = variantsByProduct[p.id]?.length || 0;
+    const attrCount = Object.keys(storeAttributes).length;
     const imgSrc = p.image ? `${SERVER_URL}${p.image}` : null;
-    const minPrice = hasVariants ? Math.min(...(variantsByProduct[p.id] || []).map((v) => Number(v.selling_price))) : Number(p.selling_price);
-    const cartItem = !hasVariants ? cart.find((i) => i.key === makeKey(p.id)) : null;
-    const qty = cartItem?.quantity || 0;
+    const minPrice = Number(p.selling_price);
+    const totalQtyInCart = cart.filter((i) => i.product_id === p.id).reduce((s, i) => s + i.quantity, 0);
 
     return (
-      <div key={p.id} className="bg-stone-50 border border-stone-200 rounded-2xl overflow-hidden flex flex-col cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-stone-300 transition-all duration-150 select-none" onClick={() => handleProductClick(p)}>
-        {/* Square image */}
-        <div className="relative w-full aspect-square bg-stone-100 flex items-center justify-center overflow-hidden">
-          {hasVariants && (
-            <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-amber-500 text-white text-[9px] font-bold rounded-full px-2 py-0.5">
-              <Layers size={7} />
-              {variantCount}
-            </div>
-          )}
-          {qty > 0 && !hasVariants && <div className="absolute top-2 right-2 z-10 w-5 h-5 bg-stone-800 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{qty}</div>}
+      <div key={p.id} className="bg-stone-50 border border-stone-200 rounded-2xl overflow-hidden flex flex-row items-center cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-stone-300 transition-all duration-150 select-none gap-3 px-3 py-2.5" onClick={() => handleProductClick(p)}>
+        {/* Square image — left side */}
+        <div className="relative flex-shrink-0 w-14 h-14 bg-stone-100 rounded-xl flex items-center justify-center overflow-hidden">
+          {totalQtyInCart > 0 ? (
+            <div className="absolute top-0.5 right-0.5 z-10 w-5 h-5 bg-stone-800 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{totalQtyInCart}</div>
+          ) : hasVariants ? (
+            <div className="absolute top-0.5 right-0.5 z-10 w-5 h-5 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{variantCount}</div>
+          ) : attrCount > 0 ? (
+            <div className="absolute top-0.5 right-0.5 z-10 w-5 h-5 bg-violet-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{attrCount}</div>
+          ) : null}
           {imgSrc ? (
             <img
               src={imgSrc}
@@ -277,33 +449,16 @@ export default function POS() {
               }}
             />
           ) : (
-            <Tag size={isMobile ? 22 : 28} className="text-stone-300" />
+            <Tag size={20} className="text-stone-300" />
           )}
         </div>
 
-        {/* Footer — qty controls if in cart, otherwise just name + price */}
-        <div className="px-3 pt-2.5 pb-3">
-          <p className="text-xs font-semibold text-stone-700 truncate leading-snug mb-2">{p.name}</p>
-          <div className="flex items-center justify-between gap-1.5">
-            <span className="text-sm font-bold text-stone-800">
-              {currencySymbol} {minPrice.toLocaleString()}
-            </span>
-            {qty > 0 && !hasVariants ? (
-              /* inline qty stepper when item is in cart */
-              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                <button className="w-[22px] h-[22px] rounded-md bg-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-300 transition-colors" onClick={() => updateQty(makeKey(p.id), -1)}>
-                  <Minus size={9} />
-                </button>
-                <span className="text-xs font-bold text-stone-800 w-4 text-center">{qty}</span>
-                <button className="w-[22px] h-[22px] rounded-md bg-stone-800 flex items-center justify-center text-white hover:bg-stone-700 transition-colors" onClick={() => addToCart(p)}>
-                  <Plus size={9} />
-                </button>
-              </div>
-            ) : (
-              /* No + button — the whole card is clickable */
-              <div className="w-2 h-2 rounded-full bg-stone-300" />
-            )}
-          </div>
+        {/* Right side — name, price, qty controls */}
+        <div className="flex-1 min-w-0 flex flex-col gap-1">
+          <p className="text-xs font-semibold text-stone-700 leading-snug line-clamp-2">{p.name}</p>
+          <span className="text-sm font-bold text-stone-800">
+            {currencySymbol} {minPrice.toLocaleString()}
+          </span>
         </div>
       </div>
     );
@@ -318,7 +473,7 @@ export default function POS() {
       {/* ── TOP: fixed header + customer row (flex-shrink-0) ── */}
       <div className="flex-shrink-0">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-stone-100">
+        <div className="flex items-center justify-between px-2 py-1 border-b border-stone-100">
           {isMobile && (
             <button className="mr-2 text-stone-400 hover:text-stone-600" onClick={() => setCartOpen(false)}>
               <ChevronUp size={16} />
@@ -326,17 +481,18 @@ export default function POS() {
           )}
           <div>
             <p className="text-sm font-bold text-stone-800">Order Details</p>
-            <p className="text-[11px] text-stone-400 mt-0.5">{invoiceNo}</p>
+            {/* <p className="text-[11px] text-stone-400 mt-0.5">{invoiceNo}</p> */}
           </div>
-          <button onClick={resetOrder} className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-600 transition-colors">
+          <p className="flex items-center gap-1.5 px-3 py-0 bg-stone-100 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-500">Auto</p>
+          <button onClick={resetOrder} className="flex items-center gap-1.5 px-3 py-0 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-600 transition-colors">
             <RotateCcw size={10} /> Reset Order
           </button>
         </div>
 
         {/* Customer / Store */}
-        <div className="px-4 py-2.5 border-b border-stone-100 flex gap-2 items-center">
+        <div className="px-2 py-0.5 border-b border-stone-100 flex flex-col gap-1.5">
           {currentStore?.id == null && stores.length > 0 && (
-            <select value={selectedStoreId} onChange={(e) => setSelectedStoreId(e.target.value)} className="flex-1 text-xs bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-stone-700 outline-none focus:border-amber-400">
+            <select value={selectedStoreId} onChange={(e) => setSelectedStoreId(e.target.value)} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1 text-stone-700 outline-none focus:border-amber-400">
               <option value="">Store…</option>
               {stores.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -345,23 +501,25 @@ export default function POS() {
               ))}
             </select>
           )}
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="flex-1 text-xs bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-stone-700 outline-none focus:border-amber-400">
-            <option value="">Walk-in customer</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          <div className="w-8 h-8 rounded-lg border border-stone-200 bg-stone-50 flex items-center justify-center flex-shrink-0 text-stone-400">
-            <User size={14} />
+          <div className="flex items-center gap-2">
+            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="flex-1 min-w-0 text-xs bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1 text-stone-700 outline-none focus:border-amber-400">
+              <option value="">Walk-in customer</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <div className="w-6 h-6 rounded-lg border border-stone-200 bg-stone-50 flex items-center justify-center flex-shrink-0 text-stone-400">
+              <User size={14} />
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── MIDDLE: scrollable cart items ── */}
       {/* Uses a fixed min/max height so it always has visible space regardless of footer size */}
-      <div className="overflow-y-auto border-b border-stone-100" style={{ minHeight: 120, maxHeight: 280 }}>
+      <div className="overflow-y-auto border-b border-stone-100" style={{ minHeight: 120, maxHeight: 170 }}>
         {cart.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-stone-300">
             <ShoppingCart size={28} className="mb-2 opacity-25" />
@@ -372,17 +530,17 @@ export default function POS() {
           cart.map((item) => {
             const imgSrc = item.image ? `${SERVER_URL}${item.image}` : null;
             return (
-              <div key={item.key} className="flex items-center gap-3 px-4 py-3 border-b border-stone-100 last:border-b-0 hover:bg-stone-50/60 transition-colors">
+              <div key={item.key} className="flex items-center gap-3 px-4 py-0 border-b border-stone-100 last:border-b-0 hover:bg-stone-50/60 transition-colors">
                 {/* Thumbnail */}
-                <div className="w-10 h-10 bg-stone-100 rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden">{imgSrc ? <img src={imgSrc} alt={item.name} className="w-[85%] h-[85%] object-contain" /> : <Tag size={12} className="text-stone-300" />}</div>
+                <div className="w-7 h-7 bg-stone-100 rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden">{imgSrc ? <img src={imgSrc} alt={item.name} className="w-[85%] h-[85%] object-contain" /> : <Tag size={12} className="text-stone-300" />}</div>
 
                 {/* Info + qty */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-semibold text-stone-800 truncate leading-tight">{item.name}</p>
-                  <p className="text-[10.5px] text-stone-400 mt-0.5">
+                  {/* <p className="text-[10.5px] text-stone-400 mt-0.5">
                     {currencySymbol} {item.price.toLocaleString()} each
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-1.5">
+                  </p> */}
+                  <div className="flex items-center gap-1.5 mt-0.5">
                     <button className="w-5 h-5 rounded-md bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-200 transition-colors" onClick={() => updateQty(item.key, -1)}>
                       <Minus size={8} />
                     </button>
@@ -394,11 +552,11 @@ export default function POS() {
                 </div>
 
                 {/* Line total + delete */}
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                <div className="flex flex-col items-end gap-0 flex-shrink-0">
                   <span className="text-[12px] font-bold text-stone-800">
                     {currencySymbol} {(item.price * item.quantity).toLocaleString()}
                   </span>
-                  <button className="w-6 h-6 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-red-400 hover:bg-red-100 transition-colors" onClick={() => removeFromCart(item.key)}>
+                  <button className="w-5 h-5 rounded-lg bg-red-50 border border-red-100 flex items-center justify-center text-red-400 hover:bg-red-100 transition-colors" onClick={() => removeFromCart(item.key)}>
                     <Trash2 size={10} />
                   </button>
                 </div>
@@ -410,7 +568,7 @@ export default function POS() {
 
       {/* ── BOTTOM: payment methods + coupon + totals + action buttons ── */}
       {/* This section is also scrollable if viewport is very short */}
-      <div className="flex-1 overflow-y-auto bg-white">
+      <div className="overflow-y-auto bg-white">
         {/* Payment method buttons */}
         <div className="grid grid-cols-4 gap-1.5 px-3 pt-3 pb-2.5">
           {payMethods.map(({ label, Icon, method }) => {
@@ -512,7 +670,7 @@ export default function POS() {
 
   return (
     <MainLayout forceSidebarClosed>
-      {variantModal && <VariantModal product={variantModal} variants={variantsByProduct[variantModal.id] || []} onSelect={addToCart} onClose={() => setVariantModal(null)} />}
+      {variantModal && <ProductSelectionModal product={variantModal} variants={variantsByProduct[variantModal.id] || []} storeAttributes={storeAttributes} onSelect={addToCart} onClose={() => setVariantModal(null)} />}
 
       {/* Mobile cart drawer */}
       {isMobile && cartOpen && (
@@ -528,7 +686,7 @@ export default function POS() {
       )}
 
       {/* Main 2-col layout */}
-      <div className={`grid gap-3.5 ${isMobile ? "grid-cols-1" : "grid-cols-[1fr_340px]"}`} style={{ height: isMobile ? "calc(100vh - 110px)" : "calc(100vh - 120px)", minHeight: 400 }}>
+      <div className={`grid gap-3.5 ${isMobile ? "grid-cols-1" : "grid-cols-[1fr_340px]"}`} style={{ height: isMobile ? "calc(100vh - 110px)" : "calc(100vh - 120px)", minHeight: 400, marginTop: -10 }}>
         {/* ── LEFT: Products — CHANGE 4: scrollable ── */}
         <div className="flex flex-col gap-3 overflow-hidden">
           {/* Category tabs — fixed, horizontally scrollable */}
@@ -567,7 +725,7 @@ export default function POS() {
           <div
             className={`grid gap-2.5 flex-1 min-h-0 overflow-y-auto content-start ${isMobile ? "pb-20" : "pb-2"}`}
             style={{
-              gridTemplateColumns: `repeat(auto-fill, minmax(${isMobile ? 130 : isTablet ? 145 : 155}px, 1fr))`,
+              gridTemplateColumns: `repeat(${windowWidth >= 1900 ? 6 : windowWidth >= 1500 ? 5 : windowWidth >= 1200 ? 4 : windowWidth >= 1000 ? 3 : windowWidth >= 750 ? 2 : 1}, 1fr)`,
             }}
           >
             {filtered.map(renderCard)}

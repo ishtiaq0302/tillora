@@ -12,6 +12,7 @@ import { useLanguage } from "../../context/LanguageContext";
 const EMPTY_ITEM = {
   product_id: "",
   product_variant_id: "",
+  selected_options: {},
   quantity: 1,
   price: 0,
   discount: 0,
@@ -40,6 +41,8 @@ export default function SaleForm() {
   const [products, setProducts] = useState([]);
   const [stores, setStores] = useState([]);
   const [variantsByProduct, setVariantsByProduct] = useState({});
+  // Store-level attributes: { attrId: { id, name, allow_multi_select, values: [{id, value}] } }
+  const [storeAttributes, setStoreAttributes] = useState({});
 
   const [form, setForm] = useState({
     customer_id: "",
@@ -66,6 +69,23 @@ export default function SaleForm() {
     masterService
       .getAll("stores")
       .then((r) => setStores(r.data?.data || r.data || []))
+      .catch(() => {});
+    // Load all store-level attributes once (not per-product)
+    masterService
+      .getAll("attributes")
+      .then((r) => {
+        const attrs = r.data?.data || r.data || [];
+        const grouped = {};
+        attrs.forEach((a) => {
+          grouped[a.id] = {
+            id: a.id,
+            name: a.name,
+            allow_multi_select: !!a.allow_multi_select,
+            values: a.values || [],
+          };
+        });
+        setStoreAttributes(grouped);
+      })
       .catch(() => {});
     if (currentStore?.id) setForm((f) => ({ ...f, store_id: currentStore.id }));
   }, []);
@@ -94,6 +114,7 @@ export default function SaleForm() {
 
         if (field === "product_id") {
           newItem.product_variant_id = "";
+          newItem.selected_options = {};
           const product = products.find((p) => String(p.id) === String(value));
           if (product) {
             newItem.price = Number(product.selling_price);
@@ -101,10 +122,69 @@ export default function SaleForm() {
           }
         }
 
-        if (field === "product_variant_id" && value) {
-          const variants = variantsByProduct[item.product_id] || [];
-          const variant = variants.find((v) => String(v.id) === String(value));
-          if (variant) newItem.price = Number(variant.selling_price);
+        // Handle option selection: field format "opt_ATTRIBUTEID", value is the attributeValueId to toggle
+        if (field.startsWith("opt_")) {
+          const attrId = field.slice(4);
+          const isMultiMode = storeAttributes[attrId]?.allow_multi_select;
+          const rawCurrent = item.selected_options?.[attrId];
+          const currentArr = Array.isArray(rawCurrent) ? rawCurrent : (rawCurrent ? [rawCurrent] : []);
+
+          let nextArr;
+          if (isMultiMode) {
+            nextArr = currentArr.includes(value)
+              ? currentArr.filter((v) => v !== value)
+              : (value ? [...currentArr, value] : currentArr);
+          } else {
+            nextArr = currentArr[0] === value ? [] : (value ? [value] : []);
+          }
+
+          const newOpts = { ...(item.selected_options || {}), [attrId]: nextArr };
+          newItem.selected_options = newOpts;
+          newItem.product_variant_id = "";
+
+          // Auto-match variant using single-select attributes only
+          const singleSelectKeys = Object.keys(storeAttributes).filter(
+            (aid) => !storeAttributes[aid]?.allow_multi_select
+          );
+          const allSinglesPicked =
+            singleSelectKeys.length > 0 &&
+            singleSelectKeys.every((aid) => {
+              const v = newOpts[aid] || [];
+              return Array.isArray(v) ? v.length > 0 : !!v;
+            });
+          if (allSinglesPicked) {
+            const selectedValues = singleSelectKeys
+              .map((aid) => {
+                const v = newOpts[aid] || [];
+                const vid = Array.isArray(v) ? v[0] : v;
+                return vid ? storeAttributes[aid].values.find((av) => av.id === vid)?.value : null;
+              })
+              .filter(Boolean);
+            const vars = variantsByProduct[item.product_id] || [];
+            const match = vars.find((v) =>
+              selectedValues.every((val) =>
+                v.variant_name.toLowerCase().includes(val.toLowerCase())
+              )
+            );
+            if (match) {
+              const baseProduct = products.find((p) => String(p.id) === String(item.product_id));
+              const basePrice = baseProduct ? Number(baseProduct.selling_price) : 0;
+              newItem.product_variant_id = match.id;
+              newItem.price = basePrice + Number(match.selling_price);
+            }
+          }
+        }
+
+        if (field === "product_variant_id") {
+          const baseProduct = products.find((p) => String(p.id) === String(item.product_id));
+          const basePrice = baseProduct ? Number(baseProduct.selling_price) : 0;
+          if (value) {
+            const variants = variantsByProduct[item.product_id] || [];
+            const variant = variants.find((v) => String(v.id) === String(value));
+            if (variant) newItem.price = basePrice + Number(variant.selling_price);
+          } else {
+            newItem.price = basePrice;
+          }
         }
 
         const qty = Number(newItem.quantity) || 0;
@@ -137,20 +217,13 @@ export default function SaleForm() {
 
   const validate = () => {
     const e = {};
-    if (!form.invoice_no.trim())
-      e.invoice_no = t("invoice_required", "sale_form");
     if (!currentStore?.id && !form.store_id)
       e.store_id = t("store_required", "sale_form");
     if (items.length === 0) e.items = t("add_at_least_one_item", "sale_form");
-    const invalidItems = items.some((it) => {
-      if (!it.product_id || Number(it.quantity) <= 0) return true;
-      const product = products.find(
-        (p) => String(p.id) === String(it.product_id),
-      );
-      if (product?.product_type === "variant" && !it.product_variant_id)
-        return true;
-      return false;
-    });
+    // Variant selection is optional — only require product + quantity
+    const invalidItems = items.some(
+      (it) => !it.product_id || Number(it.quantity) <= 0
+    );
     if (invalidItems) e.items = t("items_invalid", "sale_form");
     return e;
   };
@@ -163,6 +236,7 @@ export default function SaleForm() {
     try {
       const payload = {
         ...form,
+        invoice_no: form.invoice_no?.trim() || undefined,
         customer_id: form.customer_id || null,
         store_id: form.store_id || undefined,
         subtotal,
@@ -203,6 +277,8 @@ export default function SaleForm() {
     [t("shipping", "sale_form"), Number(form.shipping)],
   ];
 
+  const attrEntries = Object.entries(storeAttributes);
+
   return (
     <MainLayout>
       <div className="fcard">
@@ -229,23 +305,15 @@ export default function SaleForm() {
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
             <div className="fg">
-              <label>
-                {t("invoice_no", "sale_form")}{" "}
-                <span style={{ color: "var(--red)" }}>*</span>
-              </label>
+              <label>{t("invoice_no", "sale_form")}</label>
               <input
                 name="invoice_no"
                 value={form.invoice_no}
                 onChange={handleFormChange}
                 style={inputStyle(errors.invoice_no)}
-                placeholder="INV-0001"
+                placeholder="Auto-generated if left blank"
                 autoFocus
               />
-              {errors.invoice_no && (
-                <span style={{ fontSize: 11, color: "var(--red)" }}>
-                  {errors.invoice_no}
-                </span>
-              )}
             </div>
 
             {currentStore?.id == null && stores.length > 0 && (
@@ -408,12 +476,26 @@ export default function SaleForm() {
                 </thead>
                 <tbody>
                   {items.map((item, idx) => {
-                    const selectedProduct = products.find(
-                      (p) => String(p.id) === String(item.product_id),
-                    );
-                    const isVariable =
-                      selectedProduct?.product_type === "variant";
-                    const variants = variantsByProduct[item.product_id] || [];
+                    const allVariants = variantsByProduct[item.product_id] || [];
+
+                    // Filtered variants: only use single-select attribute selections for variant matching
+                    const singleSelectFilterValues = attrEntries
+                      .filter(([aid]) => !storeAttributes[aid]?.allow_multi_select)
+                      .flatMap(([aid, attr]) => {
+                        const selected = item.selected_options?.[aid] || [];
+                        const arr = Array.isArray(selected) ? selected : [selected].filter(Boolean);
+                        return arr
+                          .map((vid) => attr.values.find((v) => v.id === vid)?.value)
+                          .filter(Boolean);
+                      });
+                    const filteredVariants =
+                      singleSelectFilterValues.length > 0
+                        ? allVariants.filter((v) =>
+                            singleSelectFilterValues.every((val) =>
+                              v.variant_name.toLowerCase().includes(val.toLowerCase())
+                            )
+                          )
+                        : allVariants;
 
                     return (
                       <tr key={idx}>
@@ -421,11 +503,7 @@ export default function SaleForm() {
                           <select
                             value={item.product_id}
                             onChange={(e) =>
-                              handleItemChange(
-                                idx,
-                                "product_id",
-                                e.target.value,
-                              )
+                              handleItemChange(idx, "product_id", e.target.value)
                             }
                             style={cellInput}
                           >
@@ -439,36 +517,71 @@ export default function SaleForm() {
                               </option>
                             ))}
                           </select>
-                          {isVariable && (
-                            <select
-                              value={item.product_variant_id}
-                              onChange={(e) =>
-                                handleItemChange(
-                                  idx,
-                                  "product_variant_id",
-                                  e.target.value,
-                                )
-                              }
-                              style={{
-                                ...cellInput,
-                                marginTop: 4,
-                                borderColor: !item.product_variant_id
-                                  ? "var(--amber)"
-                                  : "var(--inpbd)",
-                              }}
-                            >
-                              <option value="">
-                                {t("select_variant", "sale_form")}
-                              </option>
-                              {variants.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                  {v.variant_name}
-                                  {v.selling_price
-                                    ? ` (${Number(v.selling_price).toLocaleString()})`
-                                    : ""}
-                                </option>
-                              ))}
-                            </select>
+
+                          {/* Store-level attribute option pickers */}
+                          {item.product_id && attrEntries.map(([attrId, attr]) => {
+                            const isMulti = attr.allow_multi_select;
+                            return (
+                              <div key={attrId} style={{ marginTop: 6 }}>
+                                <div style={{ fontSize: 10, color: "var(--tx3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                                  {attr.name}
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                  {attr.values.map((av) => {
+                                    const raw = item.selected_options?.[attrId];
+                                    const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+                                    const isSel = arr.includes(av.id);
+                                    return (
+                                      <label key={av.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11.5, color: "var(--tx)" }}>
+                                        <input
+                                          type={isMulti ? "checkbox" : "radio"}
+                                          name={isMulti ? undefined : `sale_attr_${attrId}_row_${idx}`}
+                                          checked={isSel}
+                                          onChange={() => handleItemChange(idx, `opt_${attrId}`, av.id)}
+                                          style={{ accentColor: "var(--accent)", width: 13, height: 13, flexShrink: 0 }}
+                                        />
+                                        {av.value}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Variant selector — always optional */}
+                          {item.product_id && allVariants.length > 0 && (
+                            <div style={{ marginTop: 6 }}>
+                              {item.product_variant_id ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                  <span style={{ fontSize: 11, padding: "2px 9px", borderRadius: 4, background: "#f0fdf4", border: "1px solid #86efac", color: "#16a34a", fontWeight: 600 }}>
+                                    ✓ {allVariants.find((v) => v.id === item.product_variant_id)?.variant_name}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleItemChange(idx, "product_variant_id", "")}
+                                    title="Clear variant"
+                                    style={{ fontSize: 14, background: "none", border: "none", cursor: "pointer", color: "var(--tx3)", lineHeight: 1, padding: "0 2px" }}
+                                  >×</button>
+                                </div>
+                              ) : (
+                                <select
+                                  value={item.product_variant_id}
+                                  onChange={(e) =>
+                                    handleItemChange(idx, "product_variant_id", e.target.value)
+                                  }
+                                  style={{ ...cellInput, borderColor: "var(--bd2)" }}
+                                >
+                                  <option value="">{t("select_variant", "sale_form")} (optional)</option>
+                                  {filteredVariants.map((v) => (
+                                    <option key={v.id} value={v.id}>
+                                      {v.variant_name}
+                                      {v.selling_price ? ` (${Number(v.selling_price).toLocaleString()})` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
                           )}
                         </td>
                         {["quantity", "price", "discount", "tax"].map(
@@ -519,7 +632,7 @@ export default function SaleForm() {
               </table>
             </div>
             <p style={{ fontSize: 10.5, color: "var(--tx3)", marginTop: 4 }}>
-              {t("variants_indicator", "sale_form")}
+              {t("variants_indicator", "sale_form")} Attribute and variant selection is optional.
             </p>
           </div>
 
