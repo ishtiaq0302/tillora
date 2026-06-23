@@ -41,31 +41,33 @@ model Tenant {
   isActive           Boolean           @default(true)
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
-  attributes         Attribute[]
-  auditLogs          AuditLog[]
-  productVariants    ProductVariant[]
-  variants           Variant[]
-  brands             Brand[]
-  cashRegisters      CashRegister[]
-  categories         Category[]
-  customers          Customer[]
-  expenseCategories  ExpenseCategory[]
-  expenses           Expense[]
-  products           Product[]
-  purchases          Purchase[]
-  restaurantTables   RestaurantTable[]
-  roles              Role[]
-  sales              Sale[]
-  settings           Setting[]
-  stockMovements     StockMovement[]
-  stores             Store[]
-  subscriptions      Subscription[]
-  suppliers          Supplier[]
-  taxes              Tax[]
-  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
-  translations       Translation[]
-  units              Unit[]
-  users              User[]
+  attributes              Attribute[]
+  auditLogs               AuditLog[]
+  productVariants         ProductVariant[]
+  variants                Variant[]
+  brands                  Brand[]
+  cashRegisters           CashRegister[]
+  categories              Category[]
+  customers               Customer[]
+  expenseCategories       ExpenseCategory[]
+  expenses                Expense[]
+  ingredients             Ingredient[]
+  products                Product[]
+  purchases               Purchase[]
+  restaurantTables        RestaurantTable[]
+  roles                   Role[]
+  sales                   Sale[]
+  settings                Setting[]
+  stockMovements          StockMovement[]
+  stores                  Store[]
+  subscriptions           Subscription[]
+  storeSubscriptions      StoreSubscription[]
+  suppliers               Supplier[]
+  taxes                   Tax[]
+  subscriptionPlan        SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  translations            Translation[]
+  units                   Unit[]
+  users                   User[]
 
   @@map("tenants")
 }
@@ -102,6 +104,7 @@ model Store {
   storeProductBatches         ProductBatch[]
   storeProductVariants        ProductVariant[]
   storeVariants               Variant[]
+  storeIngredients            Ingredient[]
   purchases                   Purchase[]
   restaurantTables            RestaurantTable[]
   sales                       Sale[]
@@ -378,16 +381,18 @@ model ProductVariant {
 }
 
 model Variant {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  storeId     String?  @db.Uuid
-  name        String
-  multiSelect Boolean  @default(false)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  store       Store?   @relation(fields: [storeId], references: [id])
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @db.Uuid
+  storeId       String?        @db.Uuid
+  name          String
+  multiSelect   Boolean        @default(false)
+  stockQuantity Decimal        @default(0)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store         Store?         @relation(fields: [storeId], references: [id])
+  purchaseItems PurchaseItem[]
 
   @@index([tenantId])
   @@map("variants")
@@ -491,6 +496,8 @@ model PurchaseItem {
   purchaseId       String          @db.Uuid
   productId        String?         @db.Uuid
   productVariantId String?         @db.Uuid
+  ingredientId     String?         @db.Uuid
+  variantId        String?         @db.Uuid
   quantity         Decimal         @default(1)
   costPrice        Decimal         @default(0)
   tax              Decimal         @default(0)
@@ -499,10 +506,32 @@ model PurchaseItem {
   createdAt        DateTime        @default(now())
   product          Product?        @relation(fields: [productId], references: [id])
   productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  ingredient       Ingredient?     @relation(fields: [ingredientId], references: [id])
+  variant          Variant?        @relation(fields: [variantId], references: [id])
   purchase         Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   @@index([purchaseId])
   @@map("purchase_items")
+}
+
+model Ingredient {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @db.Uuid
+  storeId       String?        @db.Uuid
+  name          String
+  unit          String?
+  costPrice     Decimal        @default(0)
+  stockQuantity Decimal        @default(0)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store         Store?         @relation(fields: [storeId], references: [id])
+  purchaseItems PurchaseItem[]
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("ingredients")
 }
 
 model StockMovement {
@@ -797,6 +826,40 @@ model Supplier {
 
   @@index([tenantId])
   @@map("suppliers")
+}
+
+model StoreSubscriptionPlan {
+  id            String              @id @default(uuid()) @db.Uuid
+  name          String
+  code          String              @unique
+  price         Decimal             @default(0)
+  durationDays  Int                 @default(30)
+  maxStores     Int                 @default(1)
+  isActive      Boolean             @default(true)
+  paddlePriceId String?             @map("paddle_price_id") @db.VarChar(100)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  subscriptions StoreSubscription[]
+
+  @@map("store_subscription_plans")
+}
+
+model StoreSubscription {
+  id                      String                 @id @default(uuid()) @db.Uuid
+  tenantId                String                 @db.Uuid
+  storeSubscriptionPlanId String?                @db.Uuid
+  startDate               DateTime
+  endDate                 DateTime
+  amount                  Decimal                @default(0)
+  paymentStatus           String                 @default("pending")
+  status                  String                 @default("active")
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  plan                    StoreSubscriptionPlan? @relation(fields: [storeSubscriptionPlanId], references: [id])
+  tenant                  Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("store_subscriptions")
 }
 
 enum ProductType {

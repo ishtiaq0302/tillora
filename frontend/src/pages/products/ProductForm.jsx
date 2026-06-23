@@ -64,6 +64,8 @@ export default function ProductForm() {
   const [taxes, setTaxes] = useState([]);
   const [attributeValues, setAttributeValues] = useState([]);
 
+  const [systemVariantNames, setSystemVariantNames] = useState([]);
+  const [masterVariantMap, setMasterVariantMap] = useState({});
   const [existingVariants, setExistingVariants] = useState([]);
   const [newVariants, setNewVariants] = useState([{ ...EMPTY_VARIANT }]);
   const [deletingVariantId, setDeletingVariantId] = useState(null);
@@ -81,13 +83,20 @@ export default function ProductForm() {
       masterService.getAll("units"),
       masterService.getAll("taxes"),
       masterService.getAll("attribute-values"),
+      masterService.getAll("variants"),
     ])
-      .then(([cat, brd, unt, tax, atv]) => {
+      .then(([cat, brd, unt, tax, atv, vr]) => {
         setCategories(cat.data?.data || cat.data || []);
         setBrands(brd.data?.data || brd.data || []);
         setUnits(unt.data?.data || unt.data || []);
         setTaxes(tax.data?.data || tax.data || []);
         setAttributeValues(atv.data?.data || atv.data || []);
+        const vrList = vr.data?.data || vr.data || [];
+        const names = [...new Set(vrList.map((v) => v.name).filter(Boolean))].sort();
+        setSystemVariantNames(names);
+        const vMap = {};
+        vrList.forEach((v) => { vMap[v.name] = !!v.multi_select; });
+        setMasterVariantMap(vMap);
       })
       .catch(() => {});
   }, []);
@@ -202,6 +211,8 @@ export default function ProductForm() {
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = t("product_name_required", "product_form");
+    if (currentStore?.id == null && stores.length > 0 && !form.store_id)
+      e.store_id = "Store is required";
     if (form.product_type !== "variant") {
       if (form.selling_price === "" || form.selling_price === null)
         e.selling_price = t("selling_price_required", "product_form");
@@ -261,6 +272,7 @@ export default function ProductForm() {
       }
 
       if (form.product_type === "variant" && productId) {
+        // Add new variants
         const filledVariants = newVariants.filter((v) => v.variant_name.trim());
         if (filledVariants.length > 0) {
           await Promise.all(
@@ -273,10 +285,30 @@ export default function ProductForm() {
                 cost_price: Number(v.cost_price || 0),
                 selling_price: Number(v.selling_price || 0),
                 stock_quantity: Number(v.stock_quantity || 0),
+                multi_select: masterVariantMap[v.variant_name.trim()] || false,
               }),
             ),
           );
           toast.success(`${filledVariants.length} variant(s) saved`);
+        }
+
+        // Sync multi_select on existing variants against the master variants map
+        if (isEdit && existingVariants.length > 0) {
+          const toSync = existingVariants.filter((ev) => {
+            const masterVal = masterVariantMap.hasOwnProperty(ev.variant_name)
+              ? masterVariantMap[ev.variant_name]
+              : ev.multi_select;
+            return masterVal !== !!ev.multi_select;
+          });
+          if (toSync.length > 0) {
+            await Promise.all(
+              toSync.map((ev) =>
+                masterService.update("product-variants", ev.id, {
+                  multi_select: masterVariantMap[ev.variant_name] || false,
+                }),
+              ),
+            );
+          }
         }
       }
 
@@ -570,24 +602,24 @@ export default function ProductForm() {
 
           {currentStore?.id == null && stores.length > 0 && (
             <div className="fg">
-              <label>{t("store_availability", "product_form")}</label>
+              <label>{t("store_availability", "product_form")} <span style={{ color: "var(--red)" }}>*</span></label>
               <select
-                value={form.is_global ? "all" : form.store_id || "all"}
+                value={form.store_id || ""}
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === "all")
-                    setForm((f) => ({ ...f, is_global: true, store_id: "" }));
-                  else
-                    setForm((f) => ({ ...f, is_global: false, store_id: val }));
+                  setForm((f) => ({ ...f, is_global: false, store_id: val }));
+                  if (errors.store_id) setErrors((p) => ({ ...p, store_id: undefined }));
                 }}
+                style={err("store_id")}
               >
-                <option value="all">{t("all_stores", "product_form")}</option>
+                <option value="">{t("select_store", "product_form")}</option>
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
               </select>
+              {errMsg("store_id")}
             </div>
           )}
 
@@ -646,51 +678,49 @@ export default function ProductForm() {
           </div>
 
           {/* STOCK */}
-          {!isVariant && (
-            <>
-              <div className="col-span-1 sm:col-span-2 lg:col-span-3">
-                <p
-                  style={{
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.07em",
-                    color: "var(--tx3)",
-                    marginBottom: 12,
-                    borderBottom: "1px solid var(--bd)",
-                    paddingBottom: 6,
-                    marginTop: 4,
-                  }}
-                >
-                  {t("stock", "product_form")}
-                </p>
-              </div>
-              <div className="fg">
-                <label>{t("opening_stock", "product_form")}</label>
-                <input
-                  name="stock_quantity"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.stock_quantity}
-                  onChange={handleChange}
-                  placeholder="0"
-                />
-              </div>
-              <div className="fg">
-                <label>{t("alert_when_stock", "product_form")}</label>
-                <input
-                  name="stock_alert_quantity"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.stock_alert_quantity}
-                  onChange={handleChange}
-                  placeholder="0"
-                />
-              </div>
-            </>
+          <div className="col-span-1 sm:col-span-2 lg:col-span-3">
+            <p
+              style={{
+                fontSize: 10.5,
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                color: "var(--tx3)",
+                marginBottom: 12,
+                borderBottom: "1px solid var(--bd)",
+                paddingBottom: 6,
+                marginTop: 4,
+              }}
+            >
+              {t("stock", "product_form")}
+            </p>
+          </div>
+          {!isEdit && (
+            <div className="fg">
+              <label>{t("opening_stock", "product_form")}</label>
+              <input
+                name="stock_quantity"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.stock_quantity}
+                onChange={handleChange}
+                placeholder="0"
+              />
+            </div>
           )}
+          <div className="fg">
+            <label>{t("alert_when_stock", "product_form")}</label>
+            <input
+              name="stock_alert_quantity"
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.stock_alert_quantity}
+              onChange={handleChange}
+              placeholder="0"
+            />
+          </div>
 
           <div className="fg">
             <label>{t("status", "product_form")}</label>
@@ -790,27 +820,23 @@ export default function ProductForm() {
                         <thead>
                           <tr>
                             {[
-                              t("col_name", "product_form"),
-                              t("col_sku", "product_form"),
-                              t("col_cost", "product_form"),
-                              t("col_price", "product_form"),
-                              t("col_stock", "product_form"),
+                              { label: t("col_name", "product_form"), align: "left" },
+                              { label: t("col_sku", "product_form"), align: "left" },
+                              { label: t("col_cost", "product_form"), align: "right" },
+                              { label: t("col_price", "product_form"), align: "right" },
+                              { label: "Total Price", align: "right" },
                             ].map((h) => (
                               <th
-                                key={h}
+                                key={h.label}
                                 style={{
-                                  textAlign:
-                                    h === t("col_name", "product_form") ||
-                                    h === t("col_sku", "product_form")
-                                      ? "left"
-                                      : "right",
+                                  textAlign: h.align,
                                   padding: "4px 8px",
                                   color: "var(--tx3)",
                                   fontWeight: 600,
                                   fontSize: 11,
                                 }}
                               >
-                                {h}
+                                {h.label}
                               </th>
                             ))}
                             <th style={{ width: 40 }}></th>
@@ -853,7 +879,7 @@ export default function ProductForm() {
                                 style={{
                                   padding: "6px 8px",
                                   textAlign: "right",
-                                  fontWeight: 600,
+                                  color: "var(--tx2)",
                                 }}
                               >
                                 {Number(v.selling_price).toFixed(2)}
@@ -862,9 +888,11 @@ export default function ProductForm() {
                                 style={{
                                   padding: "6px 8px",
                                   textAlign: "right",
+                                  fontWeight: 600,
+                                  color: "var(--accent)",
                                 }}
                               >
-                                {Number(v.stock_quantity)}
+                                {(Number(form.selling_price || 0) + Number(v.selling_price)).toFixed(2)}
                               </td>
                               <td
                                 style={{
@@ -902,13 +930,14 @@ export default function ProductForm() {
                 </p>
 
                 <datalist id="variant-name-suggestions">
-                  {attributeValues.map((av) => (
-                    <option key={av.id} value={av.value}>
-                      {av.attribute?.name
-                        ? `${av.attribute.name}: ${av.value}`
-                        : av.value}
-                    </option>
+                  {systemVariantNames.map((name) => (
+                    <option key={`sv-${name}`} value={name} />
                   ))}
+                  {attributeValues
+                    .filter((av) => !systemVariantNames.includes(av.value))
+                    .map((av) => (
+                      <option key={av.id} value={av.value} />
+                    ))}
                 </datalist>
 
                 <div
@@ -919,7 +948,7 @@ export default function ProductForm() {
                       key={index}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr auto",
+                        gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr auto",
                         gap: 6,
                         alignItems: "end",
                       }}
@@ -935,16 +964,9 @@ export default function ProductForm() {
                           list="variant-name-suggestions"
                           value={v.variant_name}
                           onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "variant_name",
-                              e.target.value,
-                            )
+                            handleVariantChange(index, "variant_name", e.target.value)
                           }
-                          placeholder={t(
-                            "variant_name_placeholder",
-                            "product_form",
-                          )}
+                          placeholder={t("variant_name_placeholder", "product_form")}
                           style={{ fontSize: 12 }}
                         />
                       </div>
@@ -956,9 +978,7 @@ export default function ProductForm() {
                         )}
                         <input
                           value={v.sku}
-                          onChange={(e) =>
-                            handleVariantChange(index, "sku", e.target.value)
-                          }
+                          onChange={(e) => handleVariantChange(index, "sku", e.target.value)}
                           placeholder={t("optional", "product_form")}
                           style={{ fontSize: 12 }}
                         />
@@ -971,13 +991,7 @@ export default function ProductForm() {
                         )}
                         <input
                           value={v.barcode}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "barcode",
-                              e.target.value,
-                            )
-                          }
+                          onChange={(e) => handleVariantChange(index, "barcode", e.target.value)}
                           placeholder={t("optional", "product_form")}
                           style={{ fontSize: 12 }}
                         />
@@ -993,13 +1007,7 @@ export default function ProductForm() {
                           min="0"
                           step="0.01"
                           value={v.cost_price}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "cost_price",
-                              e.target.value,
-                            )
-                          }
+                          onChange={(e) => handleVariantChange(index, "cost_price", e.target.value)}
                           placeholder="0.00"
                           style={{ fontSize: 12 }}
                         />
@@ -1015,36 +1023,8 @@ export default function ProductForm() {
                           min="0"
                           step="0.01"
                           value={v.selling_price}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "selling_price",
-                              e.target.value,
-                            )
-                          }
+                          onChange={(e) => handleVariantChange(index, "selling_price", e.target.value)}
                           placeholder="0.00"
-                          style={{ fontSize: 12 }}
-                        />
-                      </div>
-                      <div className="fg" style={{ margin: 0 }}>
-                        {index === 0 && (
-                          <label style={{ fontSize: 11 }}>
-                            {t("col_stock", "product_form")}
-                          </label>
-                        )}
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={v.stock_quantity}
-                          onChange={(e) =>
-                            handleVariantChange(
-                              index,
-                              "stock_quantity",
-                              e.target.value,
-                            )
-                          }
-                          placeholder="0"
                           style={{ fontSize: 12 }}
                         />
                       </div>

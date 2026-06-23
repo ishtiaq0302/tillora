@@ -26,6 +26,7 @@ import Customers from "./pages/master/Customers";
 import Suppliers from "./pages/master/Suppliers";
 import Attributes from "./pages/master/Attributes";
 import AttributeValues from "./pages/master/AttributeValues";
+import Ingredients from "./pages/master/Ingredients";
 
 import Products from "./pages/products/Products";
 import ProductForm from "./pages/products/ProductForm";
@@ -44,7 +45,6 @@ import Tables from "./pages/restaurants/Tables";
 
 import ProductVariants from "./pages/products/ProductVariants";
 import ProductBatches from "./pages/products/ProductBatches";
-import ProductAttributeValues from "./pages/products/ProductAttributeValues";
 import ProductTranslations from "./pages/translations/ProductTranslations";
 import CategoryTranslations from "./pages/translations/CategoryTranslations";
 import StoreLanguages from "./pages/translations/StoreLanguages";
@@ -53,17 +53,31 @@ import Translations from "./pages/translations/Translations";
 import Languages from "./pages/admin/Languages";
 import SubscriptionPlans from "./pages/admin/SubscriptionPlans";
 import Subscriptions from "./pages/admin/Subscriptions";
+import StoreSubscriptionPlans from "./pages/admin/StoreSubscriptionPlans";
+import StoreSubscriptions from "./pages/admin/StoreSubscriptions";
 import AuditLogs from "./pages/admin/AuditLogs";
 import CashRegisters from "./pages/pos/CashRegisters";
 
 import Reports from "./pages/reports/Reports";
 import Settings from "./pages/settings/Settings";
 import Billing from "./pages/billing/Billing";
+import StoreBilling from "./pages/billing/StoreBilling";
+
+import Pricing from "./pages/public/Pricing";
+import Terms from "./pages/public/Terms";
+import Privacy from "./pages/public/Privacy";
+import RefundPolicy from "./pages/public/RefundPolicy";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* PUBLIC */}
+        <Route path="/pricing" element={<Pricing />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/refund-policy" element={<RefundPolicy />} />
+
         {/* AUTH */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
@@ -97,7 +111,6 @@ function App() {
         {/* PRODUCT DETAILS */}
         <Route path="/products/variants" element={<ProtectedRoute><ProductVariants /></ProtectedRoute>} />
         <Route path="/products/batches" element={<ProtectedRoute><ProductBatches /></ProtectedRoute>} />
-        <Route path="/products/attribute-values" element={<ProtectedRoute><ProductAttributeValues /></ProtectedRoute>} />
 
         {/* TRANSLATIONS */}
         <Route path="/admin/product-translations" element={<ProtectedRoute><ProductTranslations /></ProtectedRoute>} />
@@ -115,6 +128,7 @@ function App() {
         <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
         <Route path="/master/attributes" element={<ProtectedRoute><Attributes /></ProtectedRoute>} />
         <Route path="/master/attributes/:id/values" element={<ProtectedRoute><AttributeValues /></ProtectedRoute>} />
+        <Route path="/ingredients" element={<ProtectedRoute><Ingredients /></ProtectedRoute>} />
 
         {/* RESTAURANT */}
         <Route path="/restaurant/tables" element={<ProtectedRoute><Tables /></ProtectedRoute>} />
@@ -130,11 +144,14 @@ function App() {
 
         {/* BILLING */}
         <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+        <Route path="/store-billing" element={<ProtectedRoute><StoreBilling /></ProtectedRoute>} />
 
         {/* ADMIN */}
         <Route path="/admin/languages" element={<ProtectedRoute><Languages /></ProtectedRoute>} />
         <Route path="/admin/subscription-plans" element={<ProtectedRoute><SubscriptionPlans /></ProtectedRoute>} />
         <Route path="/admin/subscriptions" element={<ProtectedRoute><Subscriptions /></ProtectedRoute>} />
+        <Route path="/admin/store-subscription-plans" element={<ProtectedRoute><StoreSubscriptionPlans /></ProtectedRoute>} />
+        <Route path="/admin/store-subscriptions" element={<ProtectedRoute><StoreSubscriptions /></ProtectedRoute>} />
         <Route path="/admin/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
 
         {/* STORES */}

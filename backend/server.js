@@ -28,10 +28,14 @@ import attributeValueRoutes from "./routes/attributeValueRoutes.js";
 
 // Products
 import productRoutes from "./routes/productRoutes.js";
+import variantRoutes from "./routes/variantRoutes.js";
 import productVariantRoutes from "./routes/productVariantRoutes.js";
 import productBatchRoutes from "./routes/productBatchRoutes.js";
 import productTranslationRoutes from "./routes/productTranslationRoutes.js";
 import productAttributeValueRoutes from "./routes/productAttributeValueRoutes.js";
+
+// Ingredients
+import ingredientRoutes from "./routes/ingredientRoutes.js";
 
 // Transactions
 import saleRoutes from "./routes/saleRoutes.js";
@@ -58,6 +62,8 @@ import categoryTranslationRoutes from "./routes/categoryTranslationRoutes.js";
 import subscriptionPlanRoutes from "./routes/subscriptionPlanRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import paddleRoutes from "./routes/paddleRoutes.js";
+import storeSubscriptionPlanRoutes from "./routes/storeSubscriptionPlanRoutes.js";
+import storeSubscriptionRoutes from "./routes/storeSubscriptionRoutes.js";
 
 // POS / Cash
 import cashRegisterRoutes from "./routes/cashRegisterRoutes.js";
@@ -91,10 +97,14 @@ app.use("/api/attribute-values", attributeValueRoutes);
 
 // Products
 app.use("/api/products", productRoutes);
+app.use("/api/variants", variantRoutes);
 app.use("/api/product-variants", productVariantRoutes);
 app.use("/api/product-batches", productBatchRoutes);
 app.use("/api/product-translations", productTranslationRoutes);
 app.use("/api/product-attribute-values", productAttributeValueRoutes);
+
+// Ingredients
+app.use("/api/ingredients", ingredientRoutes);
 
 // Transactions
 app.use("/api/sales", saleRoutes);
@@ -121,6 +131,8 @@ app.use("/api/category-translations", categoryTranslationRoutes);
 app.use("/api/subscription-plans", subscriptionPlanRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/paddle", paddleRoutes);
+app.use("/api/store-subscription-plans", storeSubscriptionPlanRoutes);
+app.use("/api/store-subscriptions", storeSubscriptionRoutes);
 
 // POS / Cash
 app.use("/api/cash-registers", cashRegisterRoutes);

@@ -5,16 +5,13 @@ const PADDLE_SCRIPT = "https://cdn.paddle.com/paddle/v2/paddle.js";
 // Module-level guard so we only call Initialize once across React re-mounts.
 let _initialized = false;
 
-/**
- * Loads Paddle.js once and exposes openCheckout.
- *
- * Callbacks:
- *   onSuccess(data)  – checkout.completed  (data.transaction.id available)
- *   onError(data)    – checkout.error      (invalid price ID, network, etc.)
- *   onClosed()       – checkout.closed     (user dismissed overlay without paying)
- */
+// When VITE_PADDLE_MOCK=true the hook skips Paddle.js entirely and simulates
+// a successful transaction. Use this in local dev when you don't have a real
+// Paddle sandbox Price ID configured.
+const IS_MOCK = import.meta.env.VITE_PADDLE_MOCK === "true";
+
 export function usePaddle({ onSuccess, onError, onClosed } = {}) {
-  const [ready, setReady] = useState(_initialized);
+  const [ready, setReady] = useState(_initialized || IS_MOCK);
   const cb = useRef({ onSuccess, onError, onClosed });
 
   // Keep callbacks fresh without re-running the effect.
@@ -23,7 +20,7 @@ export function usePaddle({ onSuccess, onError, onClosed } = {}) {
   });
 
   useEffect(() => {
-    if (_initialized) {
+    if (IS_MOCK || _initialized) {
       setReady(true);
       return;
     }
@@ -51,18 +48,15 @@ export function usePaddle({ onSuccess, onError, onClosed } = {}) {
               break;
 
             case "checkout.error":
-              console.error("[Paddle] checkout.error — name:", event.name);
-              console.error("[Paddle] checkout.error — data:", JSON.stringify(event.data));
-              console.error("[Paddle] checkout.error — code:", event.data?.code);
-              console.error("[Paddle] checkout.error — detail:", event.data?.detail);
-              cb.current.onError?.(event.data);
+              // Log the full event — event.data is sometimes undefined for 400 errors
+              console.error("[Paddle] checkout.error full event:", JSON.stringify(event));
+              cb.current.onError?.(event.data ?? null);
               break;
 
             case "checkout.closed":
               cb.current.onClosed?.();
               break;
 
-            // checkout.warning fires for non-fatal issues (e.g. unsupported locale)
             case "checkout.warning":
               console.warn("[Paddle] checkout.warning:", event.data);
               break;
@@ -94,15 +88,19 @@ export function usePaddle({ onSuccess, onError, onClosed } = {}) {
     return () => script.removeEventListener("load", init);
   }, []);
 
-  /**
-   * Opens the Paddle overlay checkout.
-   * Returns false immediately if the price ID is clearly invalid.
-   *
-   * @param {string} priceId   Paddle Price ID (must start with "pri_")
-   * @param {string} [email]   Pre-fill customer email
-   * @param {object} [customData]  Metadata sent to webhook
-   */
   function openCheckout({ priceId, email, customData } = {}) {
+    // ── Simulation mode (VITE_PADDLE_MOCK=true) ────────────────────────────────
+    // Fires onSuccess with a fake SIMULATED_ transaction ID after a brief delay.
+    // The backend skips Paddle API verification for these IDs in non-production.
+    if (IS_MOCK) {
+      const simulatedTxId = `SIMULATED_${Date.now()}`;
+      console.info("[Paddle] Mock mode — simulating successful checkout:", simulatedTxId);
+      setTimeout(() => {
+        cb.current.onSuccess?.({ transaction: { id: simulatedTxId }, _simulated: true });
+      }, 900);
+      return true;
+    }
+
     if (!window.Paddle?.Checkout) {
       console.error("[Paddle] Paddle.js not ready. Call openCheckout after ready=true.");
       return false;

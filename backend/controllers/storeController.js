@@ -29,6 +29,35 @@ export const upload = multer({
 });
 
 // =====================
+// HELPER: resolve maxStores for a tenant
+// Priority: active StoreSubscription → active main Subscription → tenant's plan → default 1
+// =====================
+async function getMaxStores(tenantId) {
+  // 1. Active store-specific subscription (highest priority)
+  const storeSub = await prisma.storeSubscription.findFirst({
+    where: { tenantId, status: "active" },
+    include: { plan: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (storeSub?.plan?.maxStores != null) return storeSub.plan.maxStores;
+
+  // 2. Active main subscription's maxStores
+  const mainSub = await prisma.subscription.findFirst({
+    where: { tenantId, status: "active" },
+    include: { subscriptionPlan: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (mainSub?.subscriptionPlan?.maxStores != null) return mainSub.subscriptionPlan.maxStores;
+
+  // 3. Tenant's directly linked plan
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    include: { subscriptionPlan: true },
+  });
+  return tenant?.subscriptionPlan?.maxStores ?? 1;
+}
+
+// =====================
 // CREATE STORE
 // =====================
 export const createStore = async (req, res) => {
@@ -64,6 +93,18 @@ export const createStore = async (req, res) => {
     // Email format check
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       return res.status(400).json({ message: "Invalid email address" });
+
+    // ── Store limit check ──────────────────────────────────────────────────────
+    const maxStores = await getMaxStores(tenantId);
+    const currentCount = await prisma.store.count({ where: { tenantId } });
+    if (currentCount >= maxStores) {
+      return res.status(403).json({
+        message: `Your current plan allows up to ${maxStores} store${maxStores !== 1 ? "s" : ""}. Please upgrade your subscription to add more stores.`,
+        code: "STORE_LIMIT_REACHED",
+        maxStores,
+        currentCount,
+      });
+    }
 
     // Unique code check
     if (code) {
@@ -111,11 +152,11 @@ export const createStore = async (req, res) => {
 export const getStores = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const stores = await prisma.store.findMany({
-      where: { tenantId },
-      orderBy: { createdAt: "desc" },
-    });
-    res.json(stores);
+    const [stores, maxStores] = await Promise.all([
+      prisma.store.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } }),
+      getMaxStores(tenantId),
+    ]);
+    res.json({ stores, maxStores, currentCount: stores.length });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Server Error" });

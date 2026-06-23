@@ -1,13 +1,32 @@
 export function printSaleInvoice(sale, businessName = "My Store") {
   const items = sale.saleItems || [];
-  const rows = items.map((item) => `
-    <tr>
-      <td>${item.product?.name || "—"}${item.product_variant?.variant_name ? `<br><small>${item.product_variant.variant_name}</small>` : ""}</td>
-      <td style="text-align:right">${item.quantity}</td>
-      <td style="text-align:right">${Number(item.price).toLocaleString()}</td>
-      <td style="text-align:right">${Number(item.total).toLocaleString()}</td>
-    </tr>
-  `).join("");
+  const hasVariants = items.some((item) => item.variant_label);
+
+  const rows = items.map((item) => {
+    const basePrice = item.variant_price > 0
+      ? Number(item.price - item.variant_price).toLocaleString()
+      : Number(item.price).toLocaleString();
+    const variantCell = hasVariants
+      ? `<td style="text-align:right;font-size:11.5px">${item.variant_label ? `<span style="color:#4F8EF7;font-weight:600">${item.variant_label}</span>` : "—"}</td>`
+      : "";
+    const variantPriceCell = hasVariants
+      ? `<td style="text-align:right">${item.variant_price > 0 ? `<span style="color:#4F8EF7">+${Number(item.variant_price).toLocaleString()}</span>` : "—"}</td>`
+      : "";
+    return `
+      <tr>
+        <td>${item.product?.name || "—"}</td>
+        ${variantCell}
+        <td style="text-align:right">${item.quantity}</td>
+        <td style="text-align:right">${basePrice}</td>
+        ${variantPriceCell}
+        <td style="text-align:right">${Number(item.total).toLocaleString()}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const tableHeaders = hasVariants
+    ? ["Item", "Variant", "Qty", "Base Price", "Variant Price", "Total"]
+    : ["Item", "Qty", "Price", "Total"];
 
   _doPrint(_invoiceHtml({
     type: "SALE INVOICE",
@@ -18,6 +37,7 @@ export function printSaleInvoice(sale, businessName = "My Store") {
     storeLabel: "Store",
     storeName: sale.store?.name || "—",
     rows,
+    tableHeaders,
     subtotal: Number(sale.subtotal || 0),
     discount: Number(sale.discount || 0),
     tax: Number(sale.tax || 0),
@@ -64,7 +84,10 @@ export function printPurchaseInvoice(purchase, businessName = "My Store") {
 
 function _invoiceHtml(d) {
   const { type, invoiceNo, date, partyLabel, partyName, storeLabel, storeName, rows,
-    subtotal, discount, tax, shipping, grandTotal, notes, statusLabel, statusValue, businessName } = d;
+    subtotal, discount, tax, shipping, grandTotal, notes, statusLabel, statusValue, businessName,
+    tableHeaders } = d;
+  const defaultHeaders = ["Item", "Qty", "Price", "Total"];
+  const headers = tableHeaders || defaultHeaders;
 
   const fmt = (n) => Number(n).toLocaleString();
 
@@ -135,14 +158,11 @@ function _invoiceHtml(d) {
 <table>
   <thead>
     <tr>
-      <th style="text-align:left">Item</th>
-      <th>Qty</th>
-      <th>Price</th>
-      <th>Total</th>
+      ${headers.map((h, i) => `<th${i === 0 ? ' style="text-align:left"' : ""}>${h}</th>`).join("")}
     </tr>
   </thead>
   <tbody>
-    ${rows || '<tr><td colspan="4" style="text-align:center;color:#9ca3af">No items</td></tr>'}
+    ${rows || `<tr><td colspan="${headers.length}" style="text-align:center;color:#9ca3af">No items</td></tr>`}
   </tbody>
 </table>
 <div class="totals">

@@ -1,21 +1,48 @@
 import prisma from "../lib/prisma.js";
 import { logAudit } from "../lib/audit.js";
 
-const fmtItem = (it) => ({
-  id: it.id,
-  product_id: it.productId || null,
-  product: it.product ? { id: it.product.id, name: it.product.name } : null,
-  product_variant_id: it.productVariantId || null,
-  product_variant: it.productVariant ? { id: it.productVariant.id, variant_name: it.productVariant.variantName } : null,
-  variant_ids: it.variantIds || null,
-  quantity: Number(it.quantity),
-  price: Number(it.price),
-  discount: Number(it.discount),
-  tax: Number(it.tax),
-  total: Number(it.total),
-});
+async function buildVariantMap(items) {
+  const ids = [...new Set(items.flatMap((it) => (Array.isArray(it.variantIds) ? it.variantIds : [])))];
+  if (ids.length === 0) return {};
+  // variant_ids always reference the standalone variants table
+  const rows = await prisma.variant.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+  return Object.fromEntries(rows.map((v) => [v.id, { name: v.name, price: 0 }]));
+}
 
-const fmt = (s) => ({
+const fmtItem = (it, variantMap = {}) => {
+  const ids = Array.isArray(it.variantIds) && it.variantIds.length > 0 ? it.variantIds : null;
+  let variantLabel = null;
+  let variantPrice = null;
+  if (ids) {
+    const parts = ids.map((id) => {
+      const v = variantMap[id];
+      if (!v) return { name: id, price: 0 };
+      return { name: v.name, price: v.price };
+    });
+    variantLabel = parts.map((p) => (p.price > 0 ? `${p.name} (+${Number(p.price).toLocaleString()})` : p.name)).join(", ");
+    variantPrice = parts.reduce((sum, p) => sum + p.price, 0);
+  } else if (it.productVariant) {
+    variantLabel = it.productVariant.variantName;
+    variantPrice = Number(it.productVariant.sellingPrice ?? 0);
+  }
+  return {
+    id: it.id,
+    product_id: it.productId || null,
+    product: it.product ? { id: it.product.id, name: it.product.name } : null,
+    product_variant_id: it.productVariantId || null,
+    product_variant: it.productVariant ? { id: it.productVariant.id, variant_name: it.productVariant.variantName, selling_price: Number(it.productVariant.sellingPrice ?? 0) } : null,
+    variant_ids: ids,
+    variant_label: variantLabel,
+    variant_price: variantPrice,
+    quantity: Number(it.quantity),
+    price: Number(it.price),
+    discount: Number(it.discount),
+    tax: Number(it.tax),
+    total: Number(it.total),
+  };
+};
+
+const fmt = (s, variantNameMap = {}) => ({
   id: s.id,
   invoice_no: s.invoiceNo,
   payment_status: s.paymentStatus,
@@ -30,7 +57,7 @@ const fmt = (s) => ({
   customer: s.customer ? { id: s.customer.id, name: s.customer.name } : null,
   store_id: s.storeId,
   store: s.store ? { id: s.store.id, name: s.store.name } : null,
-  saleItems: s.items ? s.items.map(fmtItem) : [],
+  saleItems: s.items ? s.items.map((it) => fmtItem(it, variantNameMap)) : [],
   created_at: s.createdAt,
   updated_at: s.updatedAt,
 });
@@ -48,6 +75,25 @@ async function generateInvoiceNo(tx, tenantId) {
   }
   return `INV-${String(next).padStart(5, "0")}`;
 }
+
+export const getNextSaleInvoiceNo = async (req, res) => {
+  try {
+    const tenantId = req.user.tenantId;
+    const last = await prisma.sale.findFirst({
+      where: { tenantId, invoiceNo: { startsWith: "INV-" } },
+      orderBy: { createdAt: "desc" },
+      select: { invoiceNo: true },
+    });
+    let next = 1;
+    if (last) {
+      const num = parseInt(last.invoiceNo.split("-").pop(), 10);
+      if (!isNaN(num)) next = num + 1;
+    }
+    res.json({ invoice_no: `INV-${String(next).padStart(5, "0")}` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
 export const createSale = async (req, res) => {
   try {
@@ -121,17 +167,11 @@ export const createSale = async (req, res) => {
       // Update stock quantities and log movements
       for (const it of items) {
         if (it.product_id) {
+          // Always decrement base product stock
           await tx.product.update({
             where: { id: it.product_id },
             data: { stockQuantity: { decrement: Number(it.quantity || 0) } },
           });
-          // Also decrement variant stock if variant is specified
-          if (it.product_variant_id) {
-            await tx.productVariant.update({
-              where: { id: it.product_variant_id },
-              data: { stockQuantity: { decrement: Number(it.quantity || 0) } },
-            });
-          }
           await tx.stockMovement.create({
             data: {
               tenantId,
@@ -145,13 +185,25 @@ export const createSale = async (req, res) => {
             },
           });
         }
+
+        // Decrement each selected variant's stock from the variants table
+        const variantIds = Array.isArray(it.variant_ids) && it.variant_ids.length > 0 ? it.variant_ids : null;
+        if (variantIds) {
+          for (const varId of variantIds) {
+            await tx.variant.updateMany({
+              where: { id: varId },
+              data: { stockQuantity: { decrement: Number(it.quantity || 0) } },
+            });
+          }
+        }
       }
 
       return created;
     });
 
+    const variantNameMap = await buildVariantMap(sale.items || []);
     logAudit({ tenantId, userId: req.user.id, module: "sales", action: "create", recordId: sale.id, newValues: { invoice_no: sale.invoiceNo, grand_total: Number(sale.grandTotal) }, req });
-    res.status(201).json(fmt(sale));
+    res.status(201).json(fmt(sale, variantNameMap));
   } catch (err) {
     console.error("CREATE SALE ERROR:", err);
     if (err.code === "P2002") {
@@ -198,8 +250,10 @@ export const getSales = async (req, res) => {
       prisma.sale.count({ where }),
     ]);
 
+    const allItems = sales.flatMap((s) => s.items || []);
+    const variantNameMap = await buildVariantMap(allItems);
     res.json({
-      data: sales.map(fmt),
+      data: sales.map((s) => fmt(s, variantNameMap)),
       pagination: { total, page, pages: Math.ceil(total / limit) },
     });
   } catch (err) {
@@ -220,7 +274,8 @@ export const getSale = async (req, res) => {
     });
 
     if (!sale) return res.status(404).json({ message: "Sale not found" });
-    res.json(fmt(sale));
+    const variantNameMap = await buildVariantMap(sale.items || []);
+    res.json(fmt(sale, variantNameMap));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -240,10 +295,21 @@ export const deleteSale = async (req, res) => {
       // Restore stock
       for (const it of existing.items) {
         if (it.productId) {
+          // Restore base product stock
           await tx.product.update({
             where: { id: it.productId },
             data: { stockQuantity: { increment: Number(it.quantity) } },
           });
+        }
+        // Restore each variant's stock in the variants table
+        const variantIds = Array.isArray(it.variantIds) && it.variantIds.length > 0 ? it.variantIds : null;
+        if (variantIds) {
+          for (const varId of variantIds) {
+            await tx.variant.updateMany({
+              where: { id: varId },
+              data: { stockQuantity: { increment: Number(it.quantity) } },
+            });
+          }
         }
       }
       await tx.sale.delete({ where: { id: req.params.id } });

@@ -20,49 +20,27 @@ function useWindowWidth() {
 }
 
 // storeAttributes: { attrId: { id, name, allow_multi_select, values: [{id, value}] } }
-// storeVariants: standalone Variant records (multi_select: true) from /api/variants
-function ProductSelectionModal({ product, variants, storeVariants = [], storeAttributes, onSelect, onClose }) {
+function ProductSelectionModal({ product, variants, storeAttributes, onSelect, onClose }) {
   const [selectedOptions, setSelectedOptions] = useState({});
-  const [checkedVariantIds, setCheckedVariantIds] = useState(new Set());
-  const [selectedVariantId, setSelectedVariantId] = useState(null);
-
   if (!product) return null;
 
   const attrEntries = Object.entries(storeAttributes || {});
   const hasAttrs = attrEntries.length > 0;
+  const hasVariants = variants.length > 0;
 
-  // Lookup: ProductVariant name → ProductVariant (for price, covers both multi and single-select)
-  const pvByName = Object.fromEntries(variants.map((v) => [(v.variant_name || "").toLowerCase().trim(), v]));
-
-  // Lookup: standalone Variant name → Variant (for resolving IDs to Variant table at sale time)
-  const svByName = Object.fromEntries(storeVariants.map((sv) => [(sv.name || "").toLowerCase().trim(), sv]));
-
-  // Multi-select: ALL standalone Variants shown; price from matching ProductVariant if exists, else 0.
-  // id = sv.id so sale always decrements Variant.stockQuantity.
-  const multiSelectVariants = storeVariants.map((sv) => {
-    const pv = pvByName[(sv.name || "").toLowerCase().trim()];
-    return {
-      id: sv.id,
-      variant_name: sv.name,
-      selling_price: pv ? pv.selling_price : 0,
-      stock_quantity: sv.stock_quantity,
-      multi_select: true,
-    };
-  });
-
-  const singleSelectVariants = variants.filter((v) => !v.multi_select);
-  const hasMultiVariants = multiSelectVariants.length > 0;
-  const hasSingleVariants = singleSelectVariants.length > 0;
-  const hasVariants = multiSelectVariants.length > 0 || singleSelectVariants.length > 0;
-
-  const toggleMultiVariant = (variantId) => {
-    setCheckedVariantIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(variantId)) next.delete(variantId);
-      else next.add(variantId);
-      return next;
-    });
-  };
+  // Filter variants using only single-select attribute selections
+  const filteredVariants = useMemo(() => {
+    if (!hasVariants) return [];
+    const singleSelectGroups = attrEntries
+      .filter(([id, attr]) => !attr.allow_multi_select)
+      .map(([id, attr]) => {
+        const ids = selectedOptions[id] || [];
+        return ids.map((vid) => attr.values.find((v) => v.id === vid)?.value).filter(Boolean);
+      })
+      .filter((g) => g.length > 0);
+    if (singleSelectGroups.length === 0) return variants;
+    return variants.filter((v) => singleSelectGroups.every((group) => group.some((val) => v.variant_name.toLowerCase().includes(val.toLowerCase()))));
+  }, [variants, selectedOptions, attrEntries, hasVariants]);
 
   const toggleOption = (attrId, valueId) => {
     setSelectedOptions((prev) => {
@@ -77,27 +55,6 @@ function ProductSelectionModal({ product, variants, storeVariants = [], storeAtt
   };
 
   const handleAddToCart = () => {
-    const multiChecked = multiSelectVariants.filter((v) => checkedVariantIds.has(v.id));
-    const singleSelected = singleSelectVariants.find((v) => v.id === selectedVariantId);
-    const hasVariantSelections = multiChecked.length > 0 || !!singleSelected;
-
-    if (hasVariantSelections) {
-      // Combine ALL selected variants into ONE cart item
-      const allSelected = [...(singleSelected ? [singleSelected] : []), ...multiChecked];
-      const variantLabel = allSelected.map((v) => v.variant_name).join(", ");
-      const extraPrice = allSelected.reduce((sum, v) => sum + Number(v.selling_price), 0);
-      // Always use standalone Variant ID for stock decrement; fall back to v.id if no match
-      const variantIds = allSelected.map((v) => {
-        const match = svByName[(v.variant_name || "").toLowerCase().trim()];
-        return match ? match.id : v.id;
-      });
-      const variantKey = [...variantIds].sort().join("-");
-      onSelect(product, null, variantLabel, extraPrice, variantKey, variantIds);
-      onClose();
-      return;
-    }
-
-    // Fallback: attribute-based add (no variants selected)
     const optionsText = attrEntries
       .map(([id, attr]) => {
         const ids = selectedOptions[id] || [];
@@ -106,18 +63,34 @@ function ProductSelectionModal({ product, variants, storeVariants = [], storeAtt
       })
       .filter(Boolean)
       .join(" / ");
+
+    // For single-select attrs: try to find a matching variant
+    if (variants.length > 0) {
+      const singleValues = attrEntries
+        .filter(([id, attr]) => !attr.allow_multi_select)
+        .map(([id, attr]) => {
+          const [vid] = selectedOptions[id] || [];
+          return vid ? attr.values.find((v) => v.id === vid)?.value : null;
+        })
+        .filter(Boolean);
+      if (singleValues.length > 0) {
+        const match = variants.find((v) => singleValues.every((val) => v.variant_name.toLowerCase().includes(val.toLowerCase())));
+        if (match) {
+          onSelect(product, match);
+          return;
+        }
+      }
+    }
     onSelect(product, null, optionsText || undefined);
-    onClose();
   };
 
-  const anyVariantSelected = checkedVariantIds.size > 0 || !!selectedVariantId;
-  const anyAttrSelected = attrEntries.some(([id]) => (selectedOptions[id] || []).length > 0);
+  const anySelected = attrEntries.some(([id]) => (selectedOptions[id] || []).length > 0);
 
-  const subtitle = hasVariants ? "Select variants to add to cart" : hasAttrs ? "Select options (optional)" : "Add to cart";
+  const subtitle = hasAttrs && hasVariants ? "Select options to filter variants, or add directly" : hasAttrs ? "Select options (optional)" : "Select a variant (optional)";
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-[35rem] max-h-[75vh] flex flex-col shadow-2xl border border-stone-200" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl w-full max-w-sm max-h-[80vh] flex flex-col shadow-2xl border border-stone-200" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
           <div>
@@ -130,67 +103,17 @@ function ProductSelectionModal({ product, variants, storeVariants = [], storeAtt
         </div>
 
         <div className="overflow-y-auto p-4 space-y-4 flex-1">
-          {/* Multi-select variants — checkboxes, pick many, shown as horizontal chips */}
-          {hasMultiVariants && (
-            <div>
-              <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2.5">Select Multiple</p>
-              <div className="flex flex-wrap gap-2">
-                {multiSelectVariants.map((v) => {
-                  const isChecked = checkedVariantIds.has(v.id);
-                  return (
-                    <label key={v.id} className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border transition-colors ${isChecked ? "bg-amber-50 border-amber-400" : "bg-stone-50 border-stone-200 hover:border-amber-300"}`}>
-                      <input type="checkbox" checked={isChecked} onChange={() => toggleMultiVariant(v.id)} className="w-3.5 h-3.5 accent-amber-500 flex-shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="text-xs font-semibold text-stone-800">{v.variant_name}</span>
-                        <span className="text-[10px] font-bold text-stone-600">{Number(v.selling_price) > 0 ? `+${Number(v.selling_price).toLocaleString()}` : "Free"}</span>
-                        {v.stock_quantity != null && <span className={`text-[9.5px] font-semibold ${v.stock_quantity > 0 ? "text-emerald-600" : "text-red-500"}`}>{v.stock_quantity > 0 ? `${v.stock_quantity} in stock` : "Out of stock"}</span>}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Divider when both sections exist */}
-          {hasMultiVariants && hasSingleVariants && <hr className="border-stone-100" />}
-
-          {/* Single-select variants — radios, pick one, shown as horizontal chips */}
-          {hasSingleVariants && (
-            <div>
-              <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2.5">Select One</p>
-              <div className="flex flex-wrap gap-2">
-                {singleSelectVariants.map((v) => {
-                  const isSelected = selectedVariantId === v.id;
-                  return (
-                    <label key={v.id} className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border transition-colors ${isSelected ? "bg-amber-50 border-amber-400" : "bg-stone-50 border-stone-200 hover:border-amber-300"}`}>
-                      <input type="radio" name="pos_single_variant" checked={isSelected} onChange={() => {}} onClick={() => setSelectedVariantId(isSelected ? null : v.id)} className="w-3.5 h-3.5 accent-amber-500 flex-shrink-0" />
-                      <div className="flex flex-col leading-tight">
-                        <span className="text-xs font-semibold text-stone-800">{v.variant_name}</span>
-                        <span className="text-[10px] font-bold text-stone-600">{Number(v.selling_price) > 0 ? `+${Number(v.selling_price).toLocaleString()}` : "Free"}</span>
-                        {v.stock_quantity != null && <span className={`text-[9.5px] font-semibold ${v.stock_quantity > 0 ? "text-emerald-600" : "text-red-500"}`}>{v.stock_quantity > 0 ? `${v.stock_quantity} in stock` : "Out of stock"}</span>}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Divider between variants and attribute pickers */}
-          {hasVariants && hasAttrs && <hr className="border-stone-100" />}
-
-          {/* Attribute option pickers — horizontal chips */}
+          {/* Attribute option pickers — checkboxes for multi-select, radios for single-select */}
           {hasAttrs &&
             attrEntries.map(([attrId, attr]) => (
               <div key={attrId}>
-                <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2.5">{attr.name}</p>
-                <div className="flex flex-wrap gap-2">
+                <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2">{attr.name}</p>
+                <div className="flex flex-col gap-2">
                   {attr.values.map((av) => {
                     const isSelected = (selectedOptions[attrId] || []).includes(av.id);
                     return (
-                      <label key={av.id} className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${isSelected ? "bg-amber-50 border-amber-400 text-stone-800" : "bg-stone-50 border-stone-200 text-stone-600 hover:border-amber-300"}`}>
-                        <input type={attr.allow_multi_select ? "checkbox" : "radio"} name={attr.allow_multi_select ? undefined : `pos_attr_${attrId}`} checked={isSelected} onChange={() => toggleOption(attrId, av.id)} className="w-3.5 h-3.5 accent-amber-500" />
+                      <label key={av.id} className="flex items-center gap-2.5 cursor-pointer text-sm text-stone-700 font-medium">
+                        <input type={attr.allow_multi_select ? "checkbox" : "radio"} name={attr.allow_multi_select ? undefined : `pos_attr_${attrId}`} checked={isSelected} onChange={() => toggleOption(attrId, av.id)} className="w-4 h-4 accent-amber-500" />
                         {av.value}
                       </label>
                     );
@@ -198,12 +121,45 @@ function ProductSelectionModal({ product, variants, storeVariants = [], storeAtt
                 </div>
               </div>
             ))}
+
+          {/* Divider between options and variants */}
+          {hasAttrs && hasVariants && <hr className="border-stone-100" />}
+
+          {/* Variant list — optional, clicking a variant adds it directly */}
+          {hasVariants && (
+            <div>
+              {hasAttrs && <p className="text-[10.5px] font-semibold text-stone-400 uppercase tracking-wide mb-2">Variant (optional)</p>}
+              {filteredVariants.length === 0 ? (
+                <p className="text-center text-stone-400 py-4 text-xs">No matching variants — adjust options above</p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredVariants.map((v) => {
+                    const isBestMatch = filteredVariants.length === 1 && attrEntries.some(([id]) => (selectedOptions[id] || []).length > 0);
+                    return (
+                      <button
+                        key={v.id}
+                        onClick={() => onSelect(product, v)}
+                        className={`flex items-center justify-between w-full px-4 py-3 rounded-xl text-left transition-colors border ${isBestMatch ? "bg-amber-50 border-amber-400 hover:bg-amber-100" : "bg-stone-50 border-stone-200 hover:border-amber-400"}`}
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-stone-800">{v.variant_name}</p>
+                          {isBestMatch && <span className="text-[10px] font-semibold text-amber-600 mt-0.5 block">Best match — tap to add</span>}
+                          {v.stock_quantity != null && <span className={`text-[10.5px] font-semibold mt-0.5 block ${v.stock_quantity > 0 ? "text-emerald-600" : "text-red-500"}`}>{v.stock_quantity > 0 ? `${v.stock_quantity} in stock` : "Out of stock"}</span>}
+                        </div>
+                        <span className="text-sm font-bold text-stone-800 ml-4">{Number(v.selling_price).toLocaleString()}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Footer */}
+        {/* Footer: Add to Cart button — always available */}
         <div className="px-4 pb-4 pt-2 border-t border-stone-100">
           <button onClick={handleAddToCart} className="w-full py-3 rounded-xl text-sm font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all">
-            {anyVariantSelected ? "Add to Cart" : anyAttrSelected ? "Add to Cart with options" : "Add to Cart"}
+            {anySelected ? "Add to Cart with options" : "Add to Cart"}
           </button>
         </div>
       </div>
@@ -219,7 +175,6 @@ export default function POS() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [variants, setVariants] = useState([]);
-  const [storeVariants, setStoreVariants] = useState([]);
   // Store-level attributes: { attrId: { id, name, allow_multi_select, values: [{id, value}] } }
   const [storeAttributes, setStoreAttributes] = useState({});
   const [customers, setCustomers] = useState([]);
@@ -232,6 +187,7 @@ export default function POS() {
   const [discount, setDiscount] = useState(0);
   const [payment, setPayment] = useState("cash");
   const [saving, setSaving] = useState(false);
+  const [invoiceCounter, setInvoiceCounter] = useState(1);
   const [variantModal, setVariantModal] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [couponCode, setCouponCode] = useState("");
@@ -244,19 +200,8 @@ export default function POS() {
       .catch(() => {});
   }, []);
 
-  const loadStoreVariants = useCallback(() => {
-    masterService
-      .getAll("variants")
-      .then((r) => {
-        const all = r.data?.data || r.data || [];
-        setStoreVariants(all.filter((v) => v.multi_select));
-      })
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     loadProducts();
-    loadStoreVariants();
     masterService
       .getAll("categories")
       .then((r) => setCategories(r.data?.data || r.data || []))
@@ -334,30 +279,18 @@ export default function POS() {
 
   const makeKey = (productId, variantId = null) => (variantId ? `${productId}-v${variantId}` : String(productId));
 
-  const addToCart = (product, variant = null, optionsText = "", extraPrice = 0, variantKey = null, variantIds = null) => {
-    const key = variantKey ? `${product.id}-variants-${variantKey}` : optionsText ? `${product.id}-opt-${optionsText.replace(/[\s/,]/g, "")}` : makeKey(product.id, variant?.id);
+  const addToCart = (product, variant = null, optionsText = "") => {
+    const key = optionsText ? `${product.id}-opt-${optionsText.replace(/[\s/]/g, "")}` : makeKey(product.id, variant?.id);
     const name = variant ? `${product.name} — ${variant.variant_name}` : optionsText ? `${product.name} — ${optionsText}` : product.name;
-    const price = Number(product.selling_price) + (variant ? Number(variant.selling_price) : 0) + extraPrice;
+    const price = variant ? Number(variant.selling_price) : Number(product.selling_price);
     const taxRate = Number(product.tax?.rate || 0);
     const image = product.image || null;
     setCart((prev) => {
       const ex = prev.find((i) => i.key === key);
       if (ex) return prev.map((i) => (i.key === key ? { ...i, quantity: i.quantity + 1 } : i));
-      return [
-        ...prev,
-        {
-          key,
-          product_id: product.id,
-          product_variant_id: variant?.id || null,
-          variant_ids: variantIds && variantIds.length > 0 ? variantIds : null,
-          name,
-          price,
-          taxRate,
-          quantity: 1,
-          image,
-        },
-      ];
+      return [...prev, { key, product_id: product.id, product_variant_id: variant?.id || null, name, price, taxRate, quantity: 1, image }];
     });
+    setVariantModal(null);
   };
 
   const handleProductClick = (product) => {
@@ -385,6 +318,7 @@ export default function POS() {
   const totalDiscount = Number(discount) + couponDiscount;
   const grandTotal = Math.max(0, subtotal - totalDiscount + taxAmount);
   const cartItemCount = cart.reduce((s, i) => s + i.quantity, 0);
+  const invoiceNo = `POS-${String(invoiceCounter).padStart(4, "0")}`;
 
   const applyCoupon = () => {
     const c = couponCode.trim().toUpperCase();
@@ -408,7 +342,8 @@ export default function POS() {
     }
     setSaving(true);
     try {
-      const result = await masterService.create("sales", {
+      await masterService.create("sales", {
+        invoice_no: invoiceNo,
         customer_id: customerId || null,
         store_id: selectedStoreId || undefined,
         payment_status: "paid",
@@ -422,7 +357,6 @@ export default function POS() {
         items: cart.map((i) => ({
           product_id: i.product_id,
           product_variant_id: i.product_variant_id || null,
-          variant_ids: i.variant_ids || null,
           quantity: i.quantity,
           price: i.price,
           discount: 0,
@@ -430,12 +364,11 @@ export default function POS() {
           total: i.price * i.quantity,
         })),
       });
-      const invoiceNo = result?.data?.invoice_no || result?.data?.invoiceNo || "completed";
       toast.success(`Sale ${invoiceNo} completed!`);
       resetOrder();
       setCartOpen(false);
       if (!currentStore?.id) setSelectedStoreId("");
-      loadStoreVariants();
+      setInvoiceCounter((c) => c + 1);
     } catch (err) {
       toast.error(err?.response?.data?.message || "Checkout failed");
     } finally {
@@ -456,7 +389,7 @@ export default function POS() {
     const variantCount = variantsByProduct[p.id]?.length || 0;
     const attrCount = Object.keys(storeAttributes).length;
     const imgSrc = p.image ? `${SERVER_URL}${p.image}` : null;
-    const minPrice = Number(p.selling_price);
+    const minPrice = hasVariants ? Math.min(...(variantsByProduct[p.id] || []).map((v) => Number(v.selling_price))) : Number(p.selling_price);
     const totalQtyInCart = cart.filter((i) => i.product_id === p.id).reduce((s, i) => s + i.quantity, 0);
 
     return (
@@ -514,7 +447,7 @@ export default function POS() {
             <p className="text-sm font-bold text-stone-800">Order Details</p>
             {/* <p className="text-[11px] text-stone-400 mt-0.5">{invoiceNo}</p> */}
           </div>
-          <p className="flex items-center gap-1.5 px-3 py-0 bg-stone-100 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-500">Auto</p>
+          <p className="flex items-center gap-1.5 px-3 py-0 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-600 transition-colors">{invoiceNo}</p>
           <button onClick={resetOrder} className="flex items-center gap-1.5 px-3 py-0 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-lg text-[11px] font-semibold text-stone-600 transition-colors">
             <RotateCcw size={10} /> Reset Order
           </button>
@@ -701,7 +634,7 @@ export default function POS() {
 
   return (
     <MainLayout forceSidebarClosed>
-      {variantModal && <ProductSelectionModal product={variantModal} variants={variantsByProduct[variantModal.id] || []} storeVariants={storeVariants} storeAttributes={storeAttributes} onSelect={addToCart} onClose={() => setVariantModal(null)} />}
+      {variantModal && <ProductSelectionModal product={variantModal} variants={variantsByProduct[variantModal.id] || []} storeAttributes={storeAttributes} onSelect={addToCart} onClose={() => setVariantModal(null)} />}
 
       {/* Mobile cart drawer */}
       {isMobile && cartOpen && (

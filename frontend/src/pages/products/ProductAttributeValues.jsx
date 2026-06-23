@@ -10,18 +10,16 @@ import { useAuth } from "../../context/AuthContext";
 
 const psStyle = { background: "var(--inp)", border: "1px solid var(--inpbd)", borderRadius: "var(--r)", padding: "3px 22px 3px 7px", fontSize: 12, color: "var(--tx)", fontFamily: "var(--font)", outline: "none" };
 
-const EMPTY = { product_id: "", attribute_id: "", attribute_value_id: "", store_id: "" };
+const EMPTY = { attribute_id: "", attribute_value_id: "", store_id: "" };
 
 export default function ProductAttributeValues() {
   const { currentStore } = useAuth();
   const [data, setData] = useState([]);
-  const [products, setProducts] = useState([]);
   const [attributes, setAttributes] = useState([]);
   const [attributeValues, setAttributeValues] = useState([]);
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterProduct, setFilterProduct] = useState("");
   const [filterStore, setFilterStore] = useState("");
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
@@ -36,13 +34,12 @@ export default function ProductAttributeValues() {
     try {
       const res = await masterService.getAll("product-attribute-values");
       setData(res.data?.data || res.data || []);
-    } catch { toast.error("Failed to load product attributes"); }
+    } catch { toast.error("Failed to load attribute values"); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
     load();
-    masterService.getAll("products").then(r => setProducts(r.data?.data || r.data || [])).catch(() => {});
     masterService.getAll("attributes").then(r => setAttributes(r.data?.data || r.data || [])).catch(() => {});
     masterService.getAll("attribute-values").then(r => setAttributeValues(r.data?.data || r.data || [])).catch(() => {});
     masterService.getAll("stores").then(r => setStores(r.data?.data || r.data || [])).catch(() => {});
@@ -54,15 +51,14 @@ export default function ProductAttributeValues() {
   }, [attributeValues, form.attribute_id]);
 
   const filtered = useMemo(() => data.filter(r => {
-    const matchProd = !filterProduct || r.product_id === filterProduct;
     const matchStore = !filterStore || r.store_id === filterStore;
     const matchSearch = !search.trim() || (r.attribute?.name || "").toLowerCase().includes(search.toLowerCase()) || (r.attribute_value?.value || "").toLowerCase().includes(search.toLowerCase());
-    return matchProd && matchStore && matchSearch;
-  }), [data, search, filterProduct, filterStore]);
+    return matchStore && matchSearch;
+  }), [data, search, filterStore]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
   const paged = useMemo(() => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filtered, currentPage, pageSize]);
-  useEffect(() => setCurrentPage(1), [search, filterProduct, filterStore, pageSize]);
+  useEffect(() => setCurrentPage(1), [search, filterStore, pageSize]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -79,21 +75,24 @@ export default function ProductAttributeValues() {
 
   const handleSave = async () => {
     const errs = {};
-    if (!form.product_id) errs.product_id = "Product is required";
     if (!form.attribute_id) errs.attribute_id = "Attribute is required";
     if (!form.attribute_value_id) errs.attribute_value_id = "Value is required";
     if (Object.keys(errs).length) return setErrors(errs);
     setSaving(true);
     try {
-      await masterService.create("product-attribute-values", { product_id: form.product_id, attribute_id: form.attribute_id, attribute_value_id: form.attribute_value_id, store_id: form.store_id || null });
-      toast.success("Attribute assigned");
+      await masterService.create("product-attribute-values", {
+        attribute_id: form.attribute_id,
+        attribute_value_id: form.attribute_value_id,
+        store_id: form.store_id || null,
+      });
+      toast.success("Attribute value added");
       closeModal(); load();
     } catch (err) { toast.error(err?.response?.data?.message || "Save failed"); }
     finally { setSaving(false); }
   };
 
   const handleDelete = async () => {
-    try { await masterService.delete("product-attribute-values", deleteDialog.id); toast.success("Attribute removed"); load(); }
+    try { await masterService.delete("product-attribute-values", deleteDialog.id); toast.success("Attribute value removed"); load(); }
     catch { toast.error("Delete failed"); }
     finally { setDeleteDialog({ open: false, id: null, label: "" }); }
   };
@@ -107,23 +106,23 @@ export default function ProductAttributeValues() {
     return pages;
   };
 
-  const productMap = useMemo(() => Object.fromEntries(products.map(p => [p.id, p.name])), [products]);
   const storeMap = useMemo(() => Object.fromEntries(stores.map(s => [s.id, s.name])), [stores]);
 
   return (
     <MainLayout>
       <div className="card">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
-          <strong className="ct" style={{ fontSize: 15, flexShrink: 0 }}>Product Attribute Values</strong>
-          <div className="srch w-full sm:w-auto sm:flex-1 sm:max-w-xs">
-            <span className="srch-ic"><Search size={13} /></span>
-            <input type="text" placeholder="Search attribute or value..." value={search} onChange={e => setSearch(e.target.value)} />
+          <div>
+            <strong className="ct" style={{ fontSize: 15 }}>Attribute Values</strong>
+            <p style={{ fontSize: 11, color: "var(--tx3)", marginTop: 2 }}>
+              Store-level attribute values used across Sales, Purchases and POS. Selection mode (single/multi) is set on the Attribute.
+            </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <select value={filterProduct} onChange={e => setFilterProduct(e.target.value)} style={psStyle}>
-              <option value="">All Products</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <div className="srch w-full sm:w-auto sm:flex-1 sm:max-w-xs">
+              <span className="srch-ic"><Search size={13} /></span>
+              <input type="text" placeholder="Search attribute or value..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
             <select value={filterStore} onChange={e => setFilterStore(e.target.value)} style={psStyle}>
               <option value="">All Stores</option>
               {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -134,7 +133,7 @@ export default function ProductAttributeValues() {
                 {[25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>
-            <Button variant="primary" size="sm" onClick={openCreate}><Plus size={13} strokeWidth={2.5} /><span>Assign</span></Button>
+            <Button variant="primary" size="sm" onClick={openCreate}><Plus size={13} strokeWidth={2.5} /><span>Add</span></Button>
           </div>
         </div>
         <hr style={{ borderColor: "var(--bd)", margin: "0 0 12px" }} />
@@ -142,7 +141,6 @@ export default function ProductAttributeValues() {
           <table className="w-full">
             <thead>
               <tr>
-                <th>Product</th>
                 <th>Attribute</th>
                 <th>Value</th>
                 <th className="hidden lg:table-cell">Store</th>
@@ -151,12 +149,11 @@ export default function ProductAttributeValues() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>Loading...</td></tr>
+                <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>Loading...</td></tr>
               ) : paged.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>No product attribute values found</td></tr>
+                <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>No attribute values configured</td></tr>
               ) : paged.map(r => (
                 <tr key={r.id}>
-                  <td style={{ color: "var(--tx2)", fontSize: 12 }}>{productMap[r.product_id] || r.product?.name || "—"}</td>
                   <td><span style={{ fontWeight: 600, color: "var(--tx)" }}>{r.attribute?.name || "—"}</span></td>
                   <td><span style={{ background: "var(--abg)", color: "var(--accent)", borderRadius: "var(--r)", padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>{r.attribute_value?.value || "—"}</span></td>
                   <td className="hidden lg:table-cell">
@@ -192,27 +189,19 @@ export default function ProductAttributeValues() {
       </div>
 
       {modal && (
-        <Modal isOpen onClose={closeModal} title="Assign Attribute to Product" width={480}
-          footer={<><Button variant="ghost" size="sm" onClick={closeModal}>Cancel</Button><Button variant="primary" size="sm" disabled={saving} onClick={handleSave}>{saving ? "Saving..." : "Assign"}</Button></>}
+        <Modal isOpen onClose={closeModal} title="Add Attribute Value" width={440}
+          footer={<><Button variant="ghost" size="sm" onClick={closeModal}>Cancel</Button><Button variant="primary" size="sm" disabled={saving} onClick={handleSave}>{saving ? "Saving..." : "Add"}</Button></>}
         >
-          <div className="fg">
-            <label>Product <span style={{ color: "var(--red)" }}>*</span></label>
-            <select name="product_id" value={form.product_id} onChange={handleChange} style={errors.product_id ? { borderColor: "var(--red)" } : {}}>
-              <option value="">Select product...</option>
-              {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            {errors.product_id && <span style={{ fontSize: 11, color: "var(--red)" }}>{errors.product_id}</span>}
-          </div>
           <div className="fg">
             <label>Attribute <span style={{ color: "var(--red)" }}>*</span></label>
             <select name="attribute_id" value={form.attribute_id} onChange={handleChange} style={errors.attribute_id ? { borderColor: "var(--red)" } : {}}>
               <option value="">Select attribute...</option>
-              {attributes.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              {attributes.map(a => <option key={a.id} value={a.id}>{a.name}{a.allow_multi_select ? " (multi)" : ""}</option>)}
             </select>
             {errors.attribute_id && <span style={{ fontSize: 11, color: "var(--red)" }}>{errors.attribute_id}</span>}
           </div>
           <div className="fg">
-            <label>Attribute Value <span style={{ color: "var(--red)" }}>*</span></label>
+            <label>Value <span style={{ color: "var(--red)" }}>*</span></label>
             <select name="attribute_value_id" value={form.attribute_value_id} onChange={handleChange} disabled={!form.attribute_id} style={errors.attribute_value_id ? { borderColor: "var(--red)" } : {}}>
               <option value="">Select value...</option>
               {filteredAttrValues.map(v => <option key={v.id} value={v.id}>{v.value}</option>)}

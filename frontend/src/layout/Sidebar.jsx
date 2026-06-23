@@ -6,7 +6,7 @@ import {
   LayoutDashboard, ShoppingCart, Receipt, TrendingDown, Package,
   ClipboardList, Shuffle, Banknote, User, Factory, FolderOpen,
   UtensilsCrossed, BarChart2, Store, ShieldCheck, Users, Globe,
-  Settings, LogOut, CreditCard,
+  Settings, LogOut, CreditCard, FlaskConical, Building2,
 } from "lucide-react";
 
 const NavItem = ({ to, icon, label, location, exact = false }) => {
@@ -75,6 +75,7 @@ const Sidebar = ({ sidebarOpen }) => {
         {/* PURCHASES */}
         <NavSection label={t("purchases_section", "nav")} />
         <NavItem to="/purchases" icon={<Package size={18} />} label={t("purchases", "nav")} location={location} exact />
+        <NavItem to="/ingredients" icon={<FlaskConical size={18} />} label="Ingredients" location={location} />
 
         {/* INVENTORY */}
         <NavSection label={t("inventory_section", "nav")} />
@@ -109,11 +110,10 @@ const Sidebar = ({ sidebarOpen }) => {
           openSubs={openSubs}
           toggleSub={toggleSub}
           location={location}
-          paths={["/products/variants", "/products/batches", "/products/attribute-values"]}
+          paths={["/products/variants", "/products/batches"]}
         >
           <SubLink to="/products/variants" label={t("product_variants", "nav")} location={location} />
           <SubLink to="/products/batches" label={t("product_batches", "nav")} location={location} />
-          <SubLink to="/products/attribute-values" label={t("attribute_values", "nav")} location={location} />
         </SubMenu>
         <NavItem to="/cash-registers" icon={<Banknote size={18} />} label={t("cash_registers", "nav")} location={location} />
 
@@ -199,6 +199,8 @@ const Sidebar = ({ sidebarOpen }) => {
               <SubLink to="/admin/category-translations" label={t("category_translations", "nav")} location={location} />
               <SubLink to="/admin/subscription-plans" label={t("subscription_plans", "nav")} location={location} />
               <SubLink to="/admin/subscriptions" label={t("subscriptions", "nav")} location={location} />
+              <SubLink to="/admin/store-subscription-plans" label="Store Sub Plans" location={location} />
+              <SubLink to="/admin/store-subscriptions" label="Store Subscriptions" location={location} />
               <SubLink to="/admin/audit-logs" label={t("audit_logs", "nav")} location={location} />
             </SubMenu>
           </>
@@ -207,6 +209,7 @@ const Sidebar = ({ sidebarOpen }) => {
         {/* SYSTEM */}
         <NavSection label={t("system", "nav")} />
         <NavItem to="/billing" icon={<CreditCard size={18} />} label="Billing" location={location} />
+        <NavItem to="/store-billing" icon={<Building2 size={18} />} label="Store Subscription" location={location} />
         <NavItem to="/settings" icon={<Settings size={18} />} label={t("settings", "nav")} location={location} />
         <div className="ni logout-item" onClick={logout} style={{ cursor: "pointer" }}>
           <div className="nic"><LogOut size={18} /></div>

@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getStores, deleteStore } from "../../services/storeService";
 import toast from "react-hot-toast";
-import { Plus, Search, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Eye, AlertTriangle, CreditCard } from "lucide-react";
 import Modal from "../component/Modal";
 import Button from "../component/Button";
 import Badge from "../component/Badge";
@@ -92,6 +92,7 @@ export default function Stores() {
   const navigate = useNavigate();
   const [selectedStores, setSelectedStores] = useState([]);
   const [stores, setStores] = useState([]);
+  const [maxStores, setMaxStores] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailStore, setDetailStore] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null, label: "" });
@@ -104,6 +105,7 @@ export default function Stores() {
       setLoading(true);
       const data = await getStores();
       setStores(Array.isArray(data) ? data : data?.stores || []);
+      if (data?.maxStores != null) setMaxStores(data.maxStores);
     } catch (err) {
       console.log(err);
       setStores([]);
@@ -171,7 +173,20 @@ export default function Stores() {
 
       <div className="card">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
-          <strong className="ct" style={{ fontSize: 15, flexShrink: 0 }}>{t("title", "stores")}</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <strong className="ct" style={{ fontSize: 15 }}>{t("title", "stores")}</strong>
+            {maxStores != null && (
+              <span
+                style={{
+                  fontSize: 11, fontWeight: 600, padding: "2px 9px", borderRadius: 20,
+                  background: stores.length >= maxStores ? "var(--rbg)" : stores.length >= maxStores * 0.8 ? "var(--ambg)" : "var(--gbg)",
+                  color: stores.length >= maxStores ? "var(--red)" : stores.length >= maxStores * 0.8 ? "var(--amber)" : "var(--green)",
+                }}
+              >
+                {stores.length} / {maxStores} stores
+              </span>
+            )}
+          </div>
 
           <div className="srch w-full sm:w-auto sm:flex-1 sm:max-w-xs">
             <span className="srch-ic"><Search size={13} /></span>
@@ -192,12 +207,37 @@ export default function Stores() {
               </Button>
             )}
 
-            <Link to="/stores/create" className="btn btn-p" style={{ fontSize: 12 }}>
-              <Plus size={13} strokeWidth={2.5} />
-              <span>{t("add", "common")}</span>
-            </Link>
+            {maxStores != null && stores.length >= maxStores ? (
+              <Link to="/billing" className="btn btn-g" style={{ fontSize: 12 }}>
+                <CreditCard size={13} strokeWidth={2.5} />
+                <span>Upgrade Plan</span>
+              </Link>
+            ) : (
+              <Link to="/stores/create" className="btn btn-p" style={{ fontSize: 12 }}>
+                <Plus size={13} strokeWidth={2.5} />
+                <span>{t("add", "common")}</span>
+              </Link>
+            )}
           </div>
         </div>
+
+        {/* Upgrade banner when at limit */}
+        {maxStores != null && stores.length >= maxStores && (
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+              background: "var(--rbg)", borderRadius: "var(--r)", marginBottom: 12, fontSize: 12,
+            }}
+          >
+            <AlertTriangle size={14} style={{ color: "var(--red)", flexShrink: 0 }} />
+            <span style={{ color: "var(--red)", fontWeight: 500 }}>
+              You have reached your plan limit of {maxStores} store{maxStores !== 1 ? "s" : ""}.
+            </span>
+            <Link to="/billing" style={{ marginLeft: "auto", fontSize: 11, color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap" }}>
+              Upgrade subscription →
+            </Link>
+          </div>
+        )}
 
         <hr style={{ borderColor: "var(--bd)", margin: "0 0 12px" }} />
 

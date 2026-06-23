@@ -6,6 +6,7 @@ const fmt = (a) => ({
   id: a.id,
   name: a.name,
   store_id: a.storeId || null,
+  allow_multi_select: a.allowMultiSelect ?? false,
   values_count: a._count?.values ?? (a.values?.length ?? 0),
   values: a.values ? a.values.map(fmtValue) : [],
   created_at: a.createdAt,
@@ -45,10 +46,15 @@ export const getAttribute = async (req, res) => {
 export const createAttribute = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const { name, store_id } = req.body;
+    const { name, store_id, allow_multi_select } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: "Name is required" });
     const attr = await prisma.attribute.create({
-      data: { tenantId, storeId: store_id || null, name: name.trim() },
+      data: {
+        tenantId,
+        storeId: store_id || null,
+        name: name.trim(),
+        allowMultiSelect: allow_multi_select === true || allow_multi_select === "true",
+      },
       include: { values: true },
     });
     res.status(201).json(fmt(attr));
@@ -60,12 +66,15 @@ export const updateAttribute = async (req, res) => {
     const tenantId = req.user.tenantId;
     const existing = await prisma.attribute.findFirst({ where: { id: req.params.id, tenantId } });
     if (!existing) return res.status(404).json({ message: "Attribute not found" });
-    const { name, store_id } = req.body;
+    const { name, store_id, allow_multi_select } = req.body;
     const updated = await prisma.attribute.update({
       where: { id: req.params.id },
       data: {
         name: name?.trim() ?? existing.name,
         storeId: store_id !== undefined ? (store_id || null) : existing.storeId,
+        allowMultiSelect: allow_multi_select !== undefined
+          ? (allow_multi_select === true || allow_multi_select === "true")
+          : existing.allowMultiSelect,
       },
       include: { values: { orderBy: { value: "asc" } } },
     });

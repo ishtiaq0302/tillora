@@ -1,6 +1,6 @@
 import MainLayout from "../../layout/MainLayout";
-import { ArrowLeft, Upload, X } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, Upload, X, AlertTriangle, CreditCard } from "lucide-react";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import Button from "../component/Button";
 import { useEffect, useState, useRef } from "react";
 import {
@@ -44,6 +44,7 @@ export default function StoreForm() {
   const { id } = useParams();
   const isEdit = !!id;
   const [loading, setLoading] = useState(false);
+  const [limitError, setLimitError] = useState(null);
   const [errors, setErrors] = useState({});
   const [logoPreview, setLogoPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
@@ -202,9 +203,11 @@ export default function StoreForm() {
       navigate("/stores");
     } catch (err) {
       console.log(err);
-      toast.error(
-        err?.response?.data?.message || t("something_went_wrong", "stores"),
-      );
+      if (err?.response?.status === 403 && err?.response?.data?.code === "STORE_LIMIT_REACHED") {
+        setLimitError(err.response.data);
+      } else {
+        toast.error(err?.response?.data?.message || t("something_went_wrong", "stores"));
+      }
     } finally {
       setLoading(false);
     }
@@ -232,6 +235,29 @@ export default function StoreForm() {
         </div>
 
         <hr className="mb-4" style={{ borderColor: "var(--bd)" }} />
+
+        {limitError && (
+          <div
+            style={{
+              display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 16px",
+              background: "var(--rbg)", border: "1px solid var(--red)", borderRadius: "var(--r)", marginBottom: 20,
+            }}
+          >
+            <AlertTriangle size={16} style={{ color: "var(--red)", flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--red)", marginBottom: 4 }}>
+                Store Limit Reached
+              </p>
+              <p style={{ fontSize: 12, color: "var(--tx2)", marginBottom: 10 }}>
+                {limitError.message}
+              </p>
+              <Link to="/billing" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--accent)", textDecoration: "none" }}>
+                <CreditCard size={12} />
+                View Subscription Plans
+              </Link>
+            </div>
+          </div>
+        )}
 
         <form
           onSubmit={handleSubmit}

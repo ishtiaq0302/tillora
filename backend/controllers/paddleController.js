@@ -91,28 +91,88 @@ async function activateTenantSubscription(tenantId, planId, txId) {
   return sub;
 }
 
+async function activateStoreSubscription(tenantId, planId) {
+  const plan = await prisma.storeSubscriptionPlan.findFirst({
+    where: { id: planId, isActive: true },
+  });
+  if (!plan) return null;
+
+  // Cancel previous pending store subscriptions
+  await prisma.storeSubscription.updateMany({
+    where: { tenantId, paymentStatus: "pending" },
+    data: { status: "cancelled" },
+  });
+
+  const today = new Date();
+  const end = new Date(today);
+  end.setDate(end.getDate() + plan.durationDays);
+
+  const sub = await prisma.storeSubscription.create({
+    data: {
+      tenantId,
+      storeSubscriptionPlanId: plan.id,
+      startDate: today,
+      endDate: end,
+      amount: plan.price,
+      paymentStatus: "paid",
+      status: "active",
+    },
+    include: { plan: true },
+  });
+
+  return sub;
+}
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 // POST /api/paddle/activate
 // Called by the frontend immediately after Paddle fires checkout.completed.
 // Verifies the transaction with Paddle's API then activates the subscription.
+// subscription_type: "store" activates a StoreSubscription; anything else activates the main Subscription.
 export const activateSubscription = async (req, res) => {
   try {
-    const { transaction_id, plan_id } = req.body;
+    const { transaction_id, plan_id, subscription_type } = req.body;
     const tenantId = req.user.tenantId;
 
     if (!transaction_id || !plan_id) {
       return res.status(400).json({ message: "transaction_id and plan_id are required" });
     }
 
-    // Verify transaction with Paddle
-    const tx = await getPaddleTransaction(transaction_id);
-
-    if (tx.status !== "completed") {
-      return res.status(400).json({ message: `Payment not completed (status: ${tx.status})` });
+    // Dev-only simulation bypass: SIMULATED_* transaction IDs skip Paddle verification.
+    // Never allowed in production.
+    const isSimulated = transaction_id.startsWith("SIMULATED_");
+    if (isSimulated && process.env.NODE_ENV === "production") {
+      return res.status(400).json({ message: "Simulated transactions are not permitted in production." });
     }
 
-    // Guard: don't double-activate if webhook already handled it
+    if (!isSimulated) {
+      // Verify transaction with Paddle
+      const tx = await getPaddleTransaction(transaction_id);
+      if (tx.status !== "completed") {
+        return res.status(400).json({ message: `Payment not completed (status: ${tx.status})` });
+      }
+    }
+
+    if (subscription_type === "store") {
+      // Guard: don't double-activate store subscription
+      const alreadyActive = await prisma.storeSubscription.findFirst({
+        where: {
+          tenantId,
+          paymentStatus: "paid",
+          status: "active",
+          storeSubscriptionPlanId: plan_id,
+          createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+        },
+      });
+      if (alreadyActive) {
+        return res.json({ success: true, subscription: alreadyActive, duplicate: true });
+      }
+      const sub = await activateStoreSubscription(tenantId, plan_id);
+      if (!sub) return res.status(404).json({ message: "Store plan not found" });
+      return res.json({ success: true, subscription: sub });
+    }
+
+    // Default: main app subscription
     const alreadyActive = await prisma.subscription.findFirst({
       where: {
         tenantId,
@@ -159,22 +219,36 @@ export const handleWebhook = async (req, res) => {
       const customData = tx.custom_data || {};
       const tenantId = customData.tenant_id;
       const planId = customData.plan_id;
+      const subscriptionType = customData.subscription_type;
 
       if (!tenantId || !planId) return res.sendStatus(200);
 
-      // Guard: avoid double-activation
-      const alreadyActive = await prisma.subscription.findFirst({
-        where: {
-          tenantId,
-          paymentStatus: "paid",
-          status: "active",
-          subscriptionPlanId: planId,
-          createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
-        },
-      });
-
-      if (!alreadyActive) {
-        await activateTenantSubscription(tenantId, planId, tx.id);
+      if (subscriptionType === "store") {
+        const alreadyActive = await prisma.storeSubscription.findFirst({
+          where: {
+            tenantId,
+            paymentStatus: "paid",
+            status: "active",
+            storeSubscriptionPlanId: planId,
+            createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+          },
+        });
+        if (!alreadyActive) {
+          await activateStoreSubscription(tenantId, planId);
+        }
+      } else {
+        const alreadyActive = await prisma.subscription.findFirst({
+          where: {
+            tenantId,
+            paymentStatus: "paid",
+            status: "active",
+            subscriptionPlanId: planId,
+            createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+          },
+        });
+        if (!alreadyActive) {
+          await activateTenantSubscription(tenantId, planId, tx.id);
+        }
       }
     }
 

@@ -16,6 +16,43 @@ const FORM = ({ form, onChange, errors, extras }) => {
           style={errors.name ? { borderColor: "var(--red)" } : {}} placeholder="e.g. Color, Size, Material" />
         {errors.name && <span style={{ fontSize: 11, color: "var(--red)" }}>{errors.name}</span>}
       </div>
+
+      <div className="fg">
+        <label
+          style={{
+            display: "inline-flex",
+            alignItems: "flex-start",
+            gap: 10,
+            cursor: "pointer",
+            padding: "10px 14px",
+            borderRadius: "var(--r)",
+            border: form.allow_multi_select ? "1.5px solid var(--accent)" : "1px solid var(--bd)",
+            background: form.allow_multi_select ? "var(--abg)" : "var(--bg3)",
+            transition: "all 0.15s",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <input
+            type="checkbox"
+            name="allow_multi_select"
+            checked={!!form.allow_multi_select}
+            onChange={onChange}
+            style={{ accentColor: "var(--accent)", width: 14, height: 14, marginTop: 2, flexShrink: 0 }}
+          />
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--tx)" }}>
+              Allow Multiple Selections
+            </div>
+            <div style={{ fontSize: 11, color: "var(--tx3)", marginTop: 2 }}>
+              When enabled, users can pick <strong>multiple values</strong> from this attribute group
+              in Sales, Purchases, and POS (e.g. selecting Red <em>and</em> Blue for Color).
+              When disabled, only one value can be selected at a time.
+            </div>
+          </div>
+        </label>
+      </div>
+
       {currentStore?.id == null && stores.length > 0 && (
         <div className="fg">
           <label>{t("store_availability", "master")}</label>
@@ -47,6 +84,16 @@ export default function Attributes() {
       tableColumns={[
         { label: t("col_name", "master"), render: (r) => <strong style={{ color: "var(--tx)" }}>{r.name}</strong> },
         {
+          label: "Selection Mode", width: 130,
+          render: (r) => r.allow_multi_select ? (
+            <span style={{ background: "var(--abg)", color: "var(--accent)", borderRadius: "var(--r)", padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>
+              Multi-Select
+            </span>
+          ) : (
+            <span style={{ color: "var(--tx3)", fontSize: 11 }}>Single</span>
+          ),
+        },
+        {
           label: t("col_store", "master"), width: 140,
           render: (r, extras) => {
             if (!r.store_id) return <span style={{ color: "var(--tx3)" }}>{t("all_stores", "master")}</span>;
@@ -71,16 +118,16 @@ export default function Attributes() {
           ),
         },
       ]}
-      emptyForm={{ name: "", store_id: currentStore?.id || "" }}
-      toForm={(r) => ({ name: r.name, store_id: r.store_id || "" })}
-      toPayload={(f) => ({ name: f.name.trim(), store_id: f.store_id || null })}
+      emptyForm={{ name: "", allow_multi_select: false, store_id: currentStore?.id || "" }}
+      toForm={(r) => ({ name: r.name, allow_multi_select: r.allow_multi_select ?? false, store_id: r.store_id || "" })}
+      toPayload={(f) => ({ name: f.name.trim(), allow_multi_select: !!f.allow_multi_select, store_id: f.store_id || null })}
       validate={(f) => {
         const e = {};
         if (!f.name.trim()) e.name = t("attribute_name_required", "master");
         return e;
       }}
       renderForm={FORM}
-      modalWidth={420}
+      modalWidth={460}
       deleteLabel={(r) => r.name}
     />
   );

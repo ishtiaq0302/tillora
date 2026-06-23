@@ -1,3 +1,17 @@
+# INFO GIVEN TO PADDLE
+
+# tillora.store
+
+# pricing
+
+# terms
+
+# privacy
+
+# refund-policy
+
+# -----------------------------------------
+
 # For Reset Database Working And Setup Again
 
 npx prisma migrate reset --force

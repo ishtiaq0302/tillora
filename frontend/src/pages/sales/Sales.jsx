@@ -137,20 +137,52 @@ export default function Sales() {
           {viewSale.saleItems?.length > 0 && (
             <div style={{ gridColumn: "1 / -1" }}>
               <p style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "var(--tx3)", marginBottom: 8 }}>{t("line_items", "common")}</p>
-              <table className="w-full" style={{ fontSize: 12 }}>
-                <thead><tr><th>{t("product", "common")}</th><th>{t("variant", "common")}</th><th>{t("qty", "common")}</th><th>{t("price", "common")}</th><th>{t("total", "common")}</th></tr></thead>
-                <tbody>
-                  {viewSale.saleItems.map((item, i) => (
-                    <tr key={i}>
-                      <td>{item.product?.name || item.product_id}</td>
-                      <td style={{ color: "var(--tx3)", fontSize: 11 }}>{item.product_variant?.variant_name || "—"}</td>
-                      <td>{item.quantity}</td>
-                      <td>{Number(item.price).toLocaleString()}</td>
-                      <td style={{ fontWeight: 600 }}>{Number(item.total).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {(() => {
+                const hasVariants = viewSale.saleItems.some((item) => item.variant_label);
+                return (
+                  <table className="w-full" style={{ fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        <th>{t("product", "common")}</th>
+                        {hasVariants && <th>{t("variant", "common")}</th>}
+                        <th>{t("qty", "common")}</th>
+                        <th>{t("price", "common")}</th>
+                        <th>{t("total", "common")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewSale.saleItems.map((item, i) => (
+                        <tr key={i}>
+                          <td>{item.product?.name || item.product_id}</td>
+                          {hasVariants && (
+                            <td style={{ fontSize: 11 }}>
+                              {item.variant_label
+                                ? <span style={{ color: "var(--accent)", fontWeight: 500 }}>{item.variant_label}</span>
+                                : <span style={{ color: "var(--tx3)" }}>—</span>}
+                            </td>
+                          )}
+                          <td>{item.quantity}</td>
+                          <td>
+                            {item.variant_price > 0 ? (
+                              <>
+                                <div style={{ color: "var(--tx3)", fontSize: 11 }}>
+                                  {Number(item.price - item.variant_price).toLocaleString()}
+                                </div>
+                                <div style={{ fontSize: 10.5, color: "var(--accent)", marginTop: 1 }}>
+                                  +{Number(item.variant_price).toLocaleString()} ({t("variant", "common")})
+                                </div>
+                              </>
+                            ) : (
+                              <div>{Number(item.price).toLocaleString()}</div>
+                            )}
+                          </td>
+                          <td style={{ fontWeight: 600 }}>{Number(item.total).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
             </div>
           )}
         </Modal>

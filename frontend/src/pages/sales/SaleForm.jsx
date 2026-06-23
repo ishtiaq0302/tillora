@@ -11,7 +11,10 @@ import { useLanguage } from "../../context/LanguageContext";
 
 const EMPTY_ITEM = {
   product_id: "",
-  product_variant_id: "",
+  product_variant_id: null,
+  variant_ids: null,
+  checkedVariantIds: [],
+  selectedSingleVariantId: null,
   selected_options: {},
   quantity: 1,
   price: 0,
@@ -41,6 +44,7 @@ export default function SaleForm() {
   const [products, setProducts] = useState([]);
   const [stores, setStores] = useState([]);
   const [variantsByProduct, setVariantsByProduct] = useState({});
+  const [storeVariants, setStoreVariants] = useState([]);
   // Store-level attributes: { attrId: { id, name, allow_multi_select, values: [{id, value}] } }
   const [storeAttributes, setStoreAttributes] = useState({});
 
@@ -70,7 +74,6 @@ export default function SaleForm() {
       .getAll("stores")
       .then((r) => setStores(r.data?.data || r.data || []))
       .catch(() => {});
-    // Load all store-level attributes once (not per-product)
     masterService
       .getAll("attributes")
       .then((r) => {
@@ -85,6 +88,18 @@ export default function SaleForm() {
           };
         });
         setStoreAttributes(grouped);
+      })
+      .catch(() => {});
+    masterService
+      .getAll("variants")
+      .then((r) => setStoreVariants((r.data?.data || r.data || []).filter((v) => v.multi_select)))
+      .catch(() => {});
+    // Prefill next invoice number
+    masterService
+      .getAll("sales/next-invoice-no")
+      .then((r) => {
+        const no = r.data?.invoice_no || r.data;
+        if (no) setForm((f) => ({ ...f, invoice_no: no }));
       })
       .catch(() => {});
     if (currentStore?.id) setForm((f) => ({ ...f, store_id: currentStore.id }));
@@ -113,7 +128,10 @@ export default function SaleForm() {
         const newItem = { ...item, [field]: value };
 
         if (field === "product_id") {
-          newItem.product_variant_id = "";
+          newItem.product_variant_id = null;
+          newItem.variant_ids = null;
+          newItem.checkedVariantIds = [];
+          newItem.selectedSingleVariantId = null;
           newItem.selected_options = {};
           const product = products.find((p) => String(p.id) === String(value));
           if (product) {
@@ -122,69 +140,70 @@ export default function SaleForm() {
           }
         }
 
-        // Handle option selection: field format "opt_ATTRIBUTEID", value is the attributeValueId to toggle
+        // Attribute option selection (optional, no variant auto-matching)
         if (field.startsWith("opt_")) {
           const attrId = field.slice(4);
           const isMultiMode = storeAttributes[attrId]?.allow_multi_select;
           const rawCurrent = item.selected_options?.[attrId];
           const currentArr = Array.isArray(rawCurrent) ? rawCurrent : (rawCurrent ? [rawCurrent] : []);
-
           let nextArr;
           if (isMultiMode) {
-            nextArr = currentArr.includes(value)
-              ? currentArr.filter((v) => v !== value)
-              : (value ? [...currentArr, value] : currentArr);
+            nextArr = currentArr.includes(value) ? currentArr.filter((v) => v !== value) : (value ? [...currentArr, value] : currentArr);
           } else {
             nextArr = currentArr[0] === value ? [] : (value ? [value] : []);
           }
-
-          const newOpts = { ...(item.selected_options || {}), [attrId]: nextArr };
-          newItem.selected_options = newOpts;
-          newItem.product_variant_id = "";
-
-          // Auto-match variant using single-select attributes only
-          const singleSelectKeys = Object.keys(storeAttributes).filter(
-            (aid) => !storeAttributes[aid]?.allow_multi_select
-          );
-          const allSinglesPicked =
-            singleSelectKeys.length > 0 &&
-            singleSelectKeys.every((aid) => {
-              const v = newOpts[aid] || [];
-              return Array.isArray(v) ? v.length > 0 : !!v;
-            });
-          if (allSinglesPicked) {
-            const selectedValues = singleSelectKeys
-              .map((aid) => {
-                const v = newOpts[aid] || [];
-                const vid = Array.isArray(v) ? v[0] : v;
-                return vid ? storeAttributes[aid].values.find((av) => av.id === vid)?.value : null;
-              })
-              .filter(Boolean);
-            const vars = variantsByProduct[item.product_id] || [];
-            const match = vars.find((v) =>
-              selectedValues.every((val) =>
-                v.variant_name.toLowerCase().includes(val.toLowerCase())
-              )
-            );
-            if (match) {
-              const baseProduct = products.find((p) => String(p.id) === String(item.product_id));
-              const basePrice = baseProduct ? Number(baseProduct.selling_price) : 0;
-              newItem.product_variant_id = match.id;
-              newItem.price = basePrice + Number(match.selling_price);
-            }
-          }
+          newItem.selected_options = { ...(item.selected_options || {}), [attrId]: nextArr };
         }
 
-        if (field === "product_variant_id") {
+        // Toggle a multi-select variant (checkbox)
+        if (field === "toggle_multi_variant") {
+          const varId = value;
+          const existing = item.checkedVariantIds || [];
+          const newChecked = existing.includes(varId) ? existing.filter((id) => id !== varId) : [...existing, varId];
+          newItem.checkedVariantIds = newChecked;
+          const allVarIds = [...(item.selectedSingleVariantId ? [item.selectedSingleVariantId] : []), ...newChecked];
           const baseProduct = products.find((p) => String(p.id) === String(item.product_id));
           const basePrice = baseProduct ? Number(baseProduct.selling_price) : 0;
-          if (value) {
-            const variants = variantsByProduct[item.product_id] || [];
-            const variant = variants.find((v) => String(v.id) === String(value));
-            if (variant) newItem.price = basePrice + Number(variant.selling_price);
-          } else {
-            newItem.price = basePrice;
-          }
+          const pvars = variantsByProduct[item.product_id] || [];
+          const pvByNameMap = Object.fromEntries(pvars.map((v) => [(v.variant_name || "").toLowerCase().trim(), v]));
+          // multi-select ids are standalone Variant IDs — look up price by name from ProductVariant
+          const multiPrice = newChecked.reduce((s, svId) => {
+            const sv = storeVariants.find((v) => v.id === svId);
+            if (!sv) return s;
+            const pv = pvByNameMap[(sv.name || "").toLowerCase().trim()];
+            return s + (pv ? Number(pv.selling_price) : 0);
+          }, 0);
+          // single-select id is still a ProductVariant ID
+          const singlePv = pvars.find((v) => v.id === item.selectedSingleVariantId);
+          const singlePrice = singlePv ? Number(singlePv.selling_price) : 0;
+          newItem.price = basePrice + multiPrice + singlePrice;
+          newItem.variant_ids = allVarIds.length > 0 ? allVarIds : null;
+          newItem.product_variant_id = null;
+        }
+
+        // Select/deselect a single-select variant (radio)
+        if (field === "select_single_variant") {
+          const varId = value;
+          const newSingleId = item.selectedSingleVariantId === varId ? null : varId;
+          newItem.selectedSingleVariantId = newSingleId;
+          const allVarIds = [...(newSingleId ? [newSingleId] : []), ...(item.checkedVariantIds || [])];
+          const baseProduct = products.find((p) => String(p.id) === String(item.product_id));
+          const basePrice = baseProduct ? Number(baseProduct.selling_price) : 0;
+          const pvars = variantsByProduct[item.product_id] || [];
+          const pvByNameMap = Object.fromEntries(pvars.map((v) => [(v.variant_name || "").toLowerCase().trim(), v]));
+          // single-select id is a ProductVariant ID — direct price lookup
+          const singlePv = pvars.find((v) => v.id === newSingleId);
+          const singlePrice = singlePv ? Number(singlePv.selling_price) : 0;
+          // multi-select ids are standalone Variant IDs — look up price by name
+          const multiPrice = (item.checkedVariantIds || []).reduce((s, svId) => {
+            const sv = storeVariants.find((v) => v.id === svId);
+            if (!sv) return s;
+            const pv = pvByNameMap[(sv.name || "").toLowerCase().trim()];
+            return s + (pv ? Number(pv.selling_price) : 0);
+          }, 0);
+          newItem.price = basePrice + singlePrice + multiPrice;
+          newItem.variant_ids = allVarIds.length > 0 ? allVarIds : null;
+          newItem.product_variant_id = null;
         }
 
         const qty = Number(newItem.quantity) || 0;
@@ -244,15 +263,29 @@ export default function SaleForm() {
         tax: itemsTax,
         shipping: Number(form.shipping),
         grand_total: grandTotal,
-        items: items.map((it) => ({
-          product_id: it.product_id,
-          product_variant_id: it.product_variant_id || null,
-          quantity: Number(it.quantity),
-          price: Number(it.price),
-          discount: Number(it.discount),
-          tax: Number(it.tax),
-          total: it.total,
-        })),
+        items: items.map((it) => {
+          // Remap ProductVariant IDs to standalone Variant IDs so Variant.stockQuantity is decremented on sale
+          const pvars = variantsByProduct[it.product_id] || [];
+          const svByName = Object.fromEntries(storeVariants.map((sv) => [sv.name.toLowerCase().trim(), sv]));
+          const resolvedVariantIds = (it.variant_ids || []).map((varId) => {
+            const pv = pvars.find((v) => v.id === varId);
+            if (pv) {
+              const match = svByName[(pv.variant_name || "").toLowerCase().trim()];
+              if (match) return match.id;
+            }
+            return varId;
+          });
+          return {
+            product_id: it.product_id,
+            product_variant_id: it.product_variant_id || null,
+            variant_ids: resolvedVariantIds.length > 0 ? resolvedVariantIds : null,
+            quantity: Number(it.quantity),
+            price: Number(it.price),
+            discount: Number(it.discount),
+            tax: Number(it.tax),
+            total: it.total,
+          };
+        }),
       };
       await masterService.create("sales", payload);
       toast.success(t("created_successfully", "sale_form"));
@@ -311,7 +344,7 @@ export default function SaleForm() {
                 value={form.invoice_no}
                 onChange={handleFormChange}
                 style={inputStyle(errors.invoice_no)}
-                placeholder="Auto-generated if left blank"
+                placeholder="Auto-generated"
                 autoFocus
               />
             </div>
@@ -477,25 +510,19 @@ export default function SaleForm() {
                 <tbody>
                   {items.map((item, idx) => {
                     const allVariants = variantsByProduct[item.product_id] || [];
-
-                    // Filtered variants: only use single-select attribute selections for variant matching
-                    const singleSelectFilterValues = attrEntries
-                      .filter(([aid]) => !storeAttributes[aid]?.allow_multi_select)
-                      .flatMap(([aid, attr]) => {
-                        const selected = item.selected_options?.[aid] || [];
-                        const arr = Array.isArray(selected) ? selected : [selected].filter(Boolean);
-                        return arr
-                          .map((vid) => attr.values.find((v) => v.id === vid)?.value)
-                          .filter(Boolean);
-                      });
-                    const filteredVariants =
-                      singleSelectFilterValues.length > 0
-                        ? allVariants.filter((v) =>
-                            singleSelectFilterValues.every((val) =>
-                              v.variant_name.toLowerCase().includes(val.toLowerCase())
-                            )
-                          )
-                        : allVariants;
+                    const pvByName = Object.fromEntries(allVariants.map((v) => [(v.variant_name || "").toLowerCase().trim(), v]));
+                    // Use standalone Variant IDs directly so variant.stockQuantity is decremented on sale
+                    const multiSelectVariants = storeVariants.map((sv) => {
+                      const pv = pvByName[(sv.name || "").toLowerCase().trim()];
+                      return {
+                        id: sv.id,
+                        variant_name: sv.name,
+                        selling_price: pv ? Number(pv.selling_price) : 0,
+                        stock_quantity: sv.stock_quantity,
+                        multi_select: true,
+                      };
+                    });
+                    const singleSelectVariants = allVariants.filter((v) => !v.multi_select);
 
                     return (
                       <tr key={idx}>
@@ -518,69 +545,47 @@ export default function SaleForm() {
                             ))}
                           </select>
 
-                          {/* Store-level attribute option pickers */}
-                          {item.product_id && attrEntries.map(([attrId, attr]) => {
-                            const isMulti = attr.allow_multi_select;
-                            return (
-                              <div key={attrId} style={{ marginTop: 6 }}>
-                                <div style={{ fontSize: 10, color: "var(--tx3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
-                                  {attr.name}
-                                </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                  {attr.values.map((av) => {
-                                    const raw = item.selected_options?.[attrId];
-                                    const arr = Array.isArray(raw) ? raw : (raw ? [raw] : []);
-                                    const isSel = arr.includes(av.id);
-                                    return (
-                                      <label key={av.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11.5, color: "var(--tx)" }}>
-                                        <input
-                                          type={isMulti ? "checkbox" : "radio"}
-                                          name={isMulti ? undefined : `sale_attr_${attrId}_row_${idx}`}
-                                          checked={isSel}
-                                          onChange={() => handleItemChange(idx, `opt_${attrId}`, av.id)}
-                                          style={{ accentColor: "var(--accent)", width: 13, height: 13, flexShrink: 0 }}
-                                        />
-                                        {av.value}
-                                      </label>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-
-                          {/* Variant selector — always optional */}
-                          {item.product_id && allVariants.length > 0 && (
+                          {/* Multi-select variants — checkboxes, pick many */}
+                          {item.product_id && multiSelectVariants.length > 0 && (
                             <div style={{ marginTop: 6 }}>
-                              {item.product_variant_id ? (
-                                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                  <span style={{ fontSize: 11, padding: "2px 9px", borderRadius: 4, background: "#f0fdf4", border: "1px solid #86efac", color: "#16a34a", fontWeight: 600 }}>
-                                    ✓ {allVariants.find((v) => v.id === item.product_variant_id)?.variant_name}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleItemChange(idx, "product_variant_id", "")}
-                                    title="Clear variant"
-                                    style={{ fontSize: 14, background: "none", border: "none", cursor: "pointer", color: "var(--tx3)", lineHeight: 1, padding: "0 2px" }}
-                                  >×</button>
-                                </div>
-                              ) : (
-                                <select
-                                  value={item.product_variant_id}
-                                  onChange={(e) =>
-                                    handleItemChange(idx, "product_variant_id", e.target.value)
-                                  }
-                                  style={{ ...cellInput, borderColor: "var(--bd2)" }}
-                                >
-                                  <option value="">{t("select_variant", "sale_form")} (optional)</option>
-                                  {filteredVariants.map((v) => (
-                                    <option key={v.id} value={v.id}>
-                                      {v.variant_name}
-                                      {v.selling_price ? ` (${Number(v.selling_price).toLocaleString()})` : ""}
-                                    </option>
-                                  ))}
-                                </select>
-                              )}
+                              <div style={{ fontSize: 10, color: "var(--tx3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                                Select Multiple
+                              </div>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                {multiSelectVariants.map((v) => {
+                                  const isChecked = (item.checkedVariantIds || []).includes(v.id);
+                                  return (
+                                    <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", padding: "3px 8px", borderRadius: 6, border: `1px solid ${isChecked ? "var(--accent, #f59e0b)" : "var(--bd)"}`, background: isChecked ? "var(--accent-bg, #fef3c7)" : "var(--bg3)", fontSize: 11.5, color: "var(--tx)", transition: "all 0.12s" }}>
+                                      <input type="checkbox" checked={isChecked} onChange={() => handleItemChange(idx, "toggle_multi_variant", v.id)} style={{ width: 12, height: 12, accentColor: "var(--accent, #f59e0b)", flexShrink: 0 }} />
+                                      <span style={{ fontWeight: 600 }}>{v.variant_name}</span>
+                                      {Number(v.selling_price) > 0 && <span style={{ color: "var(--tx3)", fontSize: 10 }}>+{Number(v.selling_price).toLocaleString()}</span>}
+                                      {v.stock_quantity != null && <span style={{ fontSize: 9.5, color: v.stock_quantity > 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v.stock_quantity > 0 ? `${v.stock_quantity}` : "Out"}</span>}
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Single-select variants — radios, pick one */}
+                          {item.product_id && singleSelectVariants.length > 0 && (
+                            <div style={{ marginTop: 6 }}>
+                              <div style={{ fontSize: 10, color: "var(--tx3)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                                Select One
+                              </div>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                                {singleSelectVariants.map((v) => {
+                                  const isSelected = item.selectedSingleVariantId === v.id;
+                                  return (
+                                    <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", padding: "3px 8px", borderRadius: 6, border: `1px solid ${isSelected ? "var(--accent, #f59e0b)" : "var(--bd)"}`, background: isSelected ? "var(--accent-bg, #fef3c7)" : "var(--bg3)", fontSize: 11.5, color: "var(--tx)", transition: "all 0.12s" }}>
+                                      <input type="radio" name={`sale_single_variant_${idx}`} checked={isSelected} onChange={() => {}} onClick={() => handleItemChange(idx, "select_single_variant", v.id)} style={{ width: 12, height: 12, accentColor: "var(--accent, #f59e0b)", flexShrink: 0 }} />
+                                      <span style={{ fontWeight: 600 }}>{v.variant_name}</span>
+                                      {Number(v.selling_price) > 0 && <span style={{ color: "var(--tx3)", fontSize: 10 }}>+{Number(v.selling_price).toLocaleString()}</span>}
+                                      {v.stock_quantity != null && <span style={{ fontSize: 9.5, color: v.stock_quantity > 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>{v.stock_quantity > 0 ? `${v.stock_quantity}` : "Out"}</span>}
+                                    </label>
+                                  );
+                                })}
+                              </div>
                             </div>
                           )}
                         </td>

@@ -288,15 +288,22 @@ export default function Billing() {
       }
     },
     onError: (data) => {
-      // 400 from Paddle usually means the Price ID doesn't exist in the catalog.
+      setActivatingId(null);
+      setPendingPlan(null);
+      // data is null/undefined when Paddle returns a 400 (e.g. price ID not found in the catalog)
+      if (!data) {
+        toast.error(
+          "Checkout failed (400). The Paddle Price ID for this plan does not exist in your Paddle account. Update it in Admin → Subscription Plans.",
+          { duration: 7000 }
+        );
+        return;
+      }
       const detail = data?.detail || data?.message || "";
       if (detail.toLowerCase().includes("price") || detail.toLowerCase().includes("item")) {
         toast.error("Checkout failed: the Paddle Price ID for this plan is invalid. Please update it in Admin → Subscription Plans.");
       } else {
-        toast.error("Checkout could not be opened. Please try again or contact support.");
+        toast.error(`Checkout error: ${detail || "Unknown error. Please try again or contact support."}`);
       }
-      setActivatingId(null);
-      setPendingPlan(null);
     },
     onClosed: () => {
       // User dismissed the overlay without paying — just reset state silently.
