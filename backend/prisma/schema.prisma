@@ -1,0 +1,834 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  code          String         @unique
+  price         Decimal        @default(0)
+  durationDays  Int            @default(30)
+  maxUsers      Int            @default(5)
+  maxStores     Int            @default(1)
+  features      Json?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  paddlePriceId String?        @map("paddle_price_id") @db.VarChar(100)
+  subscriptions Subscription[]
+  tenants       Tenant[]
+
+  @@map("subscription_plans")
+}
+
+model Tenant {
+  id                 String            @id @default(uuid()) @db.Uuid
+  subscriptionPlanId String?           @db.Uuid
+  businessName       String
+  slug               String            @unique
+  email              String?           @unique
+  phone              String?
+  logo               String?
+  subscriptionStatus String            @default("trial")
+  trialStartsAt      DateTime          @default(now())
+  trialEndsAt        DateTime?
+  subscribedAt       DateTime?
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  attributes              Attribute[]
+  auditLogs               AuditLog[]
+  productVariants         ProductVariant[]
+  variants                Variant[]
+  brands                  Brand[]
+  cashRegisters           CashRegister[]
+  categories              Category[]
+  customers               Customer[]
+  expenseCategories       ExpenseCategory[]
+  expenses                Expense[]
+  ingredients             Ingredient[]
+  products                Product[]
+  purchases               Purchase[]
+  restaurantTables        RestaurantTable[]
+  roles                   Role[]
+  sales                   Sale[]
+  settings                Setting[]
+  stockMovements          StockMovement[]
+  stores                  Store[]
+  subscriptions           Subscription[]
+  suppliers               Supplier[]
+  taxes                   Tax[]
+  subscriptionPlan        SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  translations            Translation[]
+  units                   Unit[]
+  users                   User[]
+
+  @@map("tenants")
+}
+
+model Store {
+  id                          String                  @id @default(uuid()) @db.Uuid
+  tenantId                    String                  @db.Uuid
+  name                        String
+  code                        String?
+  storeType                   String
+  address                     String?
+  city                        String?
+  state                       String?
+  country                     String?
+  zipCode                     String?
+  phone                       String?
+  email                       String?
+  currency                    String                  @default("PKR")
+  timezone                    String                  @default("Asia/Karachi")
+  dateFormat                  String                  @default("d-m-Y")
+  taxNumber                   String?
+  isActive                    Boolean                 @default(true)
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+  logo                        String?
+  storeAttributes             Attribute[]
+  storeBrands                 Brand[]
+  cashRegisters               CashRegister[]
+  storeCategories             Category[]
+  storeCustomers              Customer[]
+  storeExpenseCategories      ExpenseCategory[]
+  expenses                    Expense[]
+  storeProductAttributeValues ProductAttributeValue[]
+  storeProductBatches         ProductBatch[]
+  storeProductVariants        ProductVariant[]
+  storeVariants               Variant[]
+  storeIngredients            Ingredient[]
+  purchases                   Purchase[]
+  restaurantTables            RestaurantTable[]
+  sales                       Sale[]
+  settings                    Setting[]
+  stockMovements              StockMovement[]
+  storeLanguages              StoreLanguage[]
+  storeProducts               StoreProduct[]
+  storeUsers                  StoreUser[]
+  tenant                      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeSuppliers              Supplier[]
+  storeTaxes                  Tax[]
+  storeUnits                  Unit[]
+
+  @@index([tenantId])
+  @@map("stores")
+}
+
+model StoreUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  storeId   String   @db.Uuid
+  userId    String   @db.Uuid
+  role      String   @default("staff")
+  createdAt DateTime @default(now())
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, userId])
+  @@index([storeId])
+  @@index([userId])
+  @@map("store_users")
+}
+
+model User {
+  id             String          @id @default(uuid()) @db.Uuid
+  tenantId       String          @db.Uuid
+  firstName      String
+  lastName       String?
+  email          String          @unique
+  passwordHash   String
+  phone          String?
+  avatar         String?
+  lastLoginAt    DateTime?
+  isSuperAdmin   Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  auditLogs      AuditLog[]
+  cashRegisters  CashRegister[]
+  expenses       Expense[]
+  products       Product[]
+  purchases      Purchase[]
+  sales          Sale[]
+  stockMovements StockMovement[]
+  storeUsers     StoreUser[]
+  userRoles      UserRole[]
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @db.Uuid
+  name            String
+  description     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  rolePermissions RolePermission[]
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String           @unique
+  module          String?
+  createdAt       DateTime         @default(now())
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  roleId    String   @db.Uuid
+  createdAt DateTime @default(now())
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Category {
+  id           String                @id @default(uuid()) @db.Uuid
+  tenantId     String                @db.Uuid
+  parentId     String?               @db.Uuid
+  name         String
+  image        String?
+  isActive     Boolean               @default(true)
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  storeId      String?               @db.Uuid
+  parent       Category?             @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children     Category[]            @relation("CategoryHierarchy")
+  store        Store?                @relation(fields: [storeId], references: [id])
+  tenant       Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  translations CategoryTranslation[]
+  products     Product[]
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("categories")
+}
+
+model Brand {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  name      String
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  storeId   String?   @db.Uuid
+  store     Store?    @relation(fields: [storeId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products  Product[]
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("brands")
+}
+
+model Unit {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  name      String
+  shortName String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  storeId   String?   @db.Uuid
+  products  Product[]
+  store     Store?    @relation(fields: [storeId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("units")
+}
+
+model Tax {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  name      String
+  rate      Decimal
+  taxType   String    @default("percentage")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  storeId   String?   @db.Uuid
+  products  Product[]
+  store     Store?    @relation(fields: [storeId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("taxes")
+}
+
+model Product {
+  id                 String                  @id @default(uuid()) @db.Uuid
+  tenantId           String                  @db.Uuid
+  categoryId         String?                 @db.Uuid
+  brandId            String?                 @db.Uuid
+  unitId             String?                 @db.Uuid
+  taxId              String?                 @db.Uuid
+  name               String
+  sku                String?
+  barcode            String?
+  productType        ProductType             @default(SIMPLE)
+  costPrice          Decimal                 @default(0)
+  sellingPrice       Decimal                 @default(0)
+  hasExpiry          Boolean                 @default(false)
+  hasBatch           Boolean                 @default(false)
+  image              String?
+  description        String?
+  isActive           Boolean                 @default(true)
+  isGlobal           Boolean                 @default(true)
+  createdBy          String?                 @db.Uuid
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  stockQuantity      Decimal                 @default(0)
+  stockAlertQuantity Decimal                 @default(0)
+  allowMultiOptions  Boolean                 @default(false)
+  productAttributes  ProductAttributeValue[]
+  batches            ProductBatch[]
+  translations       ProductTranslation[]
+  variants           ProductVariant[]
+  brand              Brand?                  @relation(fields: [brandId], references: [id])
+  category           Category?               @relation(fields: [categoryId], references: [id])
+  creator            User?                   @relation(fields: [createdBy], references: [id])
+  tax                Tax?                    @relation(fields: [taxId], references: [id])
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  unit               Unit?                   @relation(fields: [unitId], references: [id])
+  purchaseItems      PurchaseItem[]
+  saleItems          SaleItem[]
+  stockMovements     StockMovement[]
+  storeProducts      StoreProduct[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([unitId])
+  @@index([taxId])
+  @@index([barcode])
+  @@map("products")
+}
+
+model StoreProduct {
+  storeId       String   @db.Uuid
+  productId     String   @db.Uuid
+  stockQuantity Decimal  @default(0)
+  lowStockAlert Decimal  @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@id([storeId, productId])
+  @@index([productId])
+  @@map("store_products")
+}
+
+model ProductVariant {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  productId     String?  @db.Uuid
+  variantName   String
+  sku           String?
+  barcode       String?
+  costPrice     Decimal  @default(0)
+  sellingPrice  Decimal  @default(0)
+  stockQuantity Decimal  @default(0)
+  multiSelect   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  storeId       String?  @db.Uuid
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product       Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store         Store?         @relation(fields: [storeId], references: [id])
+  saleItems     SaleItem[]
+  purchaseItems PurchaseItem[]
+
+  @@index([tenantId])
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model Variant {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @db.Uuid
+  storeId       String?        @db.Uuid
+  name          String
+  multiSelect   Boolean        @default(false)
+  stockQuantity Decimal        @default(0)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store         Store?         @relation(fields: [storeId], references: [id])
+  purchaseItems PurchaseItem[]
+
+  @@index([tenantId])
+  @@map("variants")
+}
+
+model ProductBatch {
+  id              String    @id @default(uuid()) @db.Uuid
+  productId       String    @db.Uuid
+  batchNo         String
+  manufactureDate DateTime?
+  expiryDate      DateTime?
+  quantity        Decimal   @default(0)
+  createdAt       DateTime  @default(now())
+  storeId         String?   @db.Uuid
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store           Store?    @relation(fields: [storeId], references: [id])
+
+  @@index([productId])
+  @@map("product_batches")
+}
+
+model Sale {
+  id            String     @id @default(uuid()) @db.Uuid
+  tenantId      String     @db.Uuid
+  storeId       String     @db.Uuid
+  customerId    String?    @db.Uuid
+  invoiceNo     String
+  subtotal      Decimal    @default(0)
+  discount      Decimal    @default(0)
+  tax           Decimal    @default(0)
+  shipping      Decimal    @default(0)
+  grandTotal    Decimal    @default(0)
+  paymentStatus String     @default("pending")
+  saleStatus    String     @default("completed")
+  notes         String?
+  createdBy     String?    @db.Uuid
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  items         SaleItem[]
+  creator       User?      @relation(fields: [createdBy], references: [id])
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+  store         Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, invoiceNo])
+  @@index([tenantId])
+  @@index([storeId])
+  @@index([customerId])
+  @@map("sales")
+}
+
+model SaleItem {
+  id               String          @id @default(uuid()) @db.Uuid
+  saleId           String          @db.Uuid
+  productId        String?         @db.Uuid
+  productVariantId String?         @db.Uuid
+  variantIds       Json?
+  quantity         Decimal         @default(1)
+  price            Decimal         @default(0)
+  discount         Decimal         @default(0)
+  tax              Decimal         @default(0)
+  total            Decimal         @default(0)
+  createdAt        DateTime        @default(now())
+  product          Product?        @relation(fields: [productId], references: [id])
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  sale             Sale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@map("sale_items")
+}
+
+model Purchase {
+  id             String         @id @default(uuid()) @db.Uuid
+  tenantId       String         @db.Uuid
+  storeId        String         @db.Uuid
+  supplierId     String?        @db.Uuid
+  invoiceNo      String?
+  subtotal       Decimal        @default(0)
+  discount       Decimal        @default(0)
+  tax            Decimal        @default(0)
+  grandTotal     Decimal        @default(0)
+  paymentStatus  String         @default("pending")
+  notes          String?
+  createdBy      String?        @db.Uuid
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  shipping       Decimal        @default(0)
+  purchaseStatus String         @default("received")
+  items          PurchaseItem[]
+  creator        User?          @relation(fields: [createdBy], references: [id])
+  store          Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  supplier       Supplier?      @relation(fields: [supplierId], references: [id])
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id               String          @id @default(uuid()) @db.Uuid
+  purchaseId       String          @db.Uuid
+  productId        String?         @db.Uuid
+  productVariantId String?         @db.Uuid
+  ingredientId     String?         @db.Uuid
+  variantId        String?         @db.Uuid
+  quantity         Decimal         @default(1)
+  costPrice        Decimal         @default(0)
+  tax              Decimal         @default(0)
+  discount         Decimal         @default(0)
+  total            Decimal         @default(0)
+  createdAt        DateTime        @default(now())
+  product          Product?        @relation(fields: [productId], references: [id])
+  productVariant   ProductVariant? @relation(fields: [productVariantId], references: [id])
+  ingredient       Ingredient?     @relation(fields: [ingredientId], references: [id])
+  variant          Variant?        @relation(fields: [variantId], references: [id])
+  purchase         Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseId])
+  @@map("purchase_items")
+}
+
+model Ingredient {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @db.Uuid
+  storeId       String?        @db.Uuid
+  name          String
+  unit          String?
+  costPrice     Decimal        @default(0)
+  stockQuantity Decimal        @default(0)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  store         Store?         @relation(fields: [storeId], references: [id])
+  purchaseItems PurchaseItem[]
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("ingredients")
+}
+
+model StockMovement {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  storeId       String?  @db.Uuid
+  productId     String   @db.Uuid
+  movementType  String
+  quantity      Decimal
+  referenceType String?
+  referenceId   String?
+  notes         String?
+  createdBy     String?  @db.Uuid
+  createdAt     DateTime @default(now())
+  creator       User?    @relation(fields: [createdBy], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store         Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("stock_movements")
+}
+
+model RestaurantTable {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  storeId   String   @db.Uuid
+  tableName String
+  capacity  Int      @default(1)
+  status    String   @default("available")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("restaurant_tables")
+}
+
+model ExpenseCategory {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  name      String
+  createdAt DateTime  @default(now())
+  storeId   String?   @db.Uuid
+  store     Store?    @relation(fields: [storeId], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  expenses  Expense[]
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @db.Uuid
+  storeId     String?          @db.Uuid
+  categoryId  String?          @db.Uuid
+  amount      Decimal
+  notes       String?
+  expenseDate DateTime         @default(now())
+  createdBy   String?          @db.Uuid
+  createdAt   DateTime         @default(now())
+  category    ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  creator     User?            @relation(fields: [createdBy], references: [id])
+  store       Store?           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("expenses")
+}
+
+model CashRegister {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
+  storeId        String    @db.Uuid
+  userId         String?   @db.Uuid
+  openingBalance Decimal   @default(0)
+  closingBalance Decimal?
+  openedAt       DateTime  @default(now())
+  closedAt       DateTime?
+  status         String    @default("open")
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User?     @relation(fields: [userId], references: [id])
+
+  @@map("cash_registers")
+}
+
+model Subscription {
+  id                 String            @id @default(uuid()) @db.Uuid
+  tenantId           String            @db.Uuid
+  subscriptionPlanId String?           @db.Uuid
+  startDate          DateTime
+  endDate            DateTime
+  amount             Decimal           @default(0)
+  paymentStatus      String            @default("pending")
+  status             String            @default("active")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  subscriptionPlan   SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("subscriptions")
+}
+
+model Language {
+  id                   String                @id @default(uuid()) @db.Uuid
+  code                 String                @unique
+  name                 String
+  nativeName           String?
+  isRtl                Boolean               @default(false)
+  isDefault            Boolean               @default(false)
+  isActive             Boolean               @default(true)
+  createdAt            DateTime              @default(now())
+  categoryTranslations CategoryTranslation[]
+  productTranslations  ProductTranslation[]
+  storeLanguages       StoreLanguage[]
+  translations         Translation[]
+
+  @@map("languages")
+}
+
+model Translation {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String?  @db.Uuid
+  languageId       String   @db.Uuid
+  translationGroup String   @map("translation_group")
+  translationKey   String   @map("translation_key")
+  translationValue String   @map("translation_value")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  language         Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  tenant           Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, languageId, translationGroup, translationKey])
+  @@index([languageId])
+  @@index([tenantId])
+  @@map("translations")
+}
+
+model ProductTranslation {
+  id          String   @id @default(uuid()) @db.Uuid
+  productId   String   @db.Uuid
+  languageId  String   @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  language    Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, languageId])
+  @@map("product_translations")
+}
+
+model CategoryTranslation {
+  id         String   @id @default(uuid()) @db.Uuid
+  categoryId String   @db.Uuid
+  languageId String   @db.Uuid
+  name       String
+  createdAt  DateTime @default(now())
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  language   Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@unique([categoryId, languageId])
+  @@map("category_translations")
+}
+
+model StoreLanguage {
+  id         String   @id @default(uuid()) @db.Uuid
+  storeId    String   @db.Uuid
+  languageId String   @db.Uuid
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  language   Language @relation(fields: [languageId], references: [id], onDelete: Cascade)
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, languageId])
+  @@map("store_languages")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String?  @db.Uuid
+  userId    String?  @db.Uuid
+  module    String?
+  action    String?
+  recordId  String?
+  oldValues Json?
+  newValues Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Attribute {
+  id                String                  @id @default(uuid()) @db.Uuid
+  tenantId          String                  @db.Uuid
+  name              String
+  createdAt         DateTime                @default(now())
+  storeId           String?                 @db.Uuid
+  allowMultiSelect  Boolean                 @default(false)
+  values            AttributeValue[]
+  store             Store?                  @relation(fields: [storeId], references: [id])
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productAttributes ProductAttributeValue[]
+
+  @@index([tenantId])
+  @@index([storeId])
+  @@map("attributes")
+}
+
+model AttributeValue {
+  id                String                  @id @default(uuid()) @db.Uuid
+  attributeId       String                  @db.Uuid
+  value             String
+  createdAt         DateTime                @default(now())
+  attribute         Attribute               @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  productAttributes ProductAttributeValue[]
+
+  @@map("attribute_values")
+}
+
+model ProductAttributeValue {
+  id               String         @id @default(uuid()) @db.Uuid
+  productId        String?        @db.Uuid
+  attributeId      String         @db.Uuid
+  attributeValueId String         @db.Uuid
+  storeId          String?        @db.Uuid
+  attribute        Attribute      @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+  product          Product?       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store            Store?         @relation(fields: [storeId], references: [id])
+
+  @@map("product_attribute_values")
+}
+
+model Setting {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  storeId      String?  @db.Uuid
+  settingKey   String
+  settingValue String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  store        Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, storeId, settingKey])
+  @@map("settings")
+}
+
+model Customer {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  name          String
+  phone         String?
+  email         String?
+  address       String?
+  city          String?
+  country       String?
+  loyaltyPoints Int      @default(0) @map("loyalty_points")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  storeId       String?  @db.Uuid
+  store         Store?   @relation(fields: [storeId], references: [id])
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sales         Sale[]
+
+  @@index([tenantId])
+  @@map("customers")
+}
+
+model Supplier {
+  id        String     @id @default(uuid()) @db.Uuid
+  tenantId  String     @db.Uuid
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  storeId   String?    @db.Uuid
+  purchases Purchase[]
+  store     Store?     @relation(fields: [storeId], references: [id])
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("suppliers")
+}
+
+enum ProductType {
+  SIMPLE
+  VARIABLE
+  COMBO
+}

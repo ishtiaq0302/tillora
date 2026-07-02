@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\" -Recurse -Force | Select-Object -Property FullName | ForEach-Object { $_.FullName } | Sort-Object | Select-Object -First 300)",
+      "Bash(Remove-Item \"e:\\\\wamp\\\\www\\\\pos\\\\frontend\\\\src\\\\pages\\\\restaurants\\\\Tables copy.jsx\" -Force)",
+      "Bash(npx prisma *)",
+      "Bash(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\\\\frontend\\\\src\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\\\\frontend\\\\src\" -Recurse -Filter \"*ashRegister*\" -File)",
+      "PowerShell(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\" -Force | Select-Object Name, @{Name='Type';Expression={if\\($_.PSIsContainer\\){'Dir'}else{'File'}}})",
+      "Bash(node prisma/seeders/seedUrduSaleTranslations.js)",
+      "Bash(Get-ChildItem -Path \"E:\\\\wamp\\\\www\\\\pos\" -Directory -Name)",
+      "Bash(Select-Object -First 20)",
+      "PowerShell(head -50)",
+      "Bash(Remove-Item \"E:\\\\wamp\\\\www\\\\pos\\\\backend\\\\prisma\\\\seeders\\\\seedUrduSaleTranslations.js\" -Force)",
+      "Bash(Remove-Item \"E:\\\\wamp\\\\www\\\\pos\\\\backend\\\\prisma\\\\seeders\\\\seedChineseTranslations.js\" -Force)",
+      "Bash(Write-Host \"Deleted both single-language seeders\")",
+      "Bash(rm \"E:/wamp/www/pos/backend/prisma/seeders/seedUrduSaleTranslations.js\")",
+      "Bash(rm \"E:/wamp/www/pos/backend/prisma/seeders/seedChineseTranslations.js\")",
+      "Bash(node prisma/seeders/seedLanguageTranslations.js)",
+      "PowerShell(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\" -Force | Select-Object Name, @{Name=\"Type\"; Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}})",
+      "PowerShell(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\\\\frontend\" -Force | Select-Object Name, @{Name=\"Type\"; Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}})",
+      "PowerShell(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\\\\frontend\\\\src\\\\pages\" -Force -Recurse | Where-Object {-not $_.PSIsContainer} | Select-Object @{Name=\"Path\"; Expression={$_.FullName -replace [regex]::Escape\\(\"e:\\\\wamp\\\\www\\\\pos\\\\\"\\), \"\"}} | Sort-Object Path)",
+      "PowerShell(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\\\\frontend\\\\src\" -Force | Where-Object {$_.PSIsContainer} | Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"e:\\\\wamp\\\\www\\\\pos\" -Force)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Remove-Item \"e:\\\\wamp\\\\www\\\\pos\\\\backend\\\\controllers\\\\payoneerController.js\" -Force)",
+      "Bash(Remove-Item \"e:\\\\wamp\\\\www\\\\pos\\\\backend\\\\routes\\\\payoneerRoutes.js\" -Force)",
+      "Bash(Remove-Item \"e:\\\\wamp\\\\www\\\\pos\\\\frontend\\\\src\\\\components\\\\PayoneerModal.jsx\" -Force)",
+      "Bash(Write-Host \"Deleted payoneer files\")",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq \"\" } | ForEach-Object { Write-Host \"PID: $\\($_.Id\\) CPU: $\\($_.CPU\\)\" })",
+      "PowerShell(Get-Process node -ErrorAction SilentlyContinue | ForEach-Object { $cmd = \\(Get-WmiObject Win32_Process -Filter \"ProcessId = $\\($_.Id\\)\" -ErrorAction SilentlyContinue\\).CommandLine; Write-Host \"PID: $\\($_.Id\\) CMD: $cmd\" })",
+      "PowerShell(Stop-Process -Id 10456 -Force)",
+      "PowerShell(Stop-Process -Id 11956 -Force)",
+      "Bash(npx nodemon *)",
+      "PowerShell(netstat -ano)"
+    ]
+  }
+}

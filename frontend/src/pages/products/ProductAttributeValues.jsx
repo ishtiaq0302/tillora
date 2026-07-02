@@ -1,0 +1,226 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Plus, Search, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import MainLayout from "../../layout/MainLayout";
+import Modal from "../component/Modal";
+import DeleteDialog from "../component/DeleteDialog";
+import Button from "../component/Button";
+import toast from "react-hot-toast";
+import masterService from "../../services/masterService";
+import { useAuth } from "../../context/AuthContext";
+
+const psStyle = { background: "var(--inp)", border: "1px solid var(--inpbd)", borderRadius: "var(--r)", padding: "3px 22px 3px 7px", fontSize: 12, color: "var(--tx)", fontFamily: "var(--font)", outline: "none" };
+
+const EMPTY = { attribute_id: "", attribute_value_id: "", store_id: "" };
+
+export default function ProductAttributeValues() {
+  const { currentStore } = useAuth();
+  const [data, setData] = useState([]);
+  const [attributes, setAttributes] = useState([]);
+  const [attributeValues, setAttributeValues] = useState([]);
+  const [stores, setStores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filterStore, setFilterStore] = useState("");
+  const [pageSize, setPageSize] = useState(25);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [modal, setModal] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY });
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null, label: "" });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await masterService.getAll("product-attribute-values");
+      setData(res.data?.data || res.data || []);
+    } catch { toast.error("Failed to load attribute values"); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    load();
+    masterService.getAll("attributes").then(r => setAttributes(r.data?.data || r.data || [])).catch(() => {});
+    masterService.getAll("attribute-values").then(r => setAttributeValues(r.data?.data || r.data || [])).catch(() => {});
+    masterService.getAll("stores").then(r => setStores(r.data?.data || r.data || [])).catch(() => {});
+  }, [load]);
+
+  const filteredAttrValues = useMemo(() => {
+    if (!form.attribute_id) return attributeValues;
+    return attributeValues.filter(v => v.attribute_id === form.attribute_id);
+  }, [attributeValues, form.attribute_id]);
+
+  const filtered = useMemo(() => data.filter(r => {
+    const matchStore = !filterStore || r.store_id === filterStore;
+    const matchSearch = !search.trim() || (r.attribute?.name || "").toLowerCase().includes(search.toLowerCase()) || (r.attribute_value?.value || "").toLowerCase().includes(search.toLowerCase());
+    return matchStore && matchSearch;
+  }), [data, search, filterStore]);
+
+  const totalPages = Math.ceil(filtered.length / pageSize);
+  const paged = useMemo(() => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filtered, currentPage, pageSize]);
+  useEffect(() => setCurrentPage(1), [search, filterStore, pageSize]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm(f => {
+      const next = { ...f, [name]: value };
+      if (name === "attribute_id") next.attribute_value_id = "";
+      return next;
+    });
+    if (errors[name]) setErrors(p => ({ ...p, [name]: undefined }));
+  };
+
+  const openCreate = () => { setForm({ ...EMPTY, store_id: currentStore?.id || "" }); setErrors({}); setModal(true); };
+  const closeModal = () => setModal(false);
+
+  const handleSave = async () => {
+    const errs = {};
+    if (!form.attribute_id) errs.attribute_id = "Attribute is required";
+    if (!form.attribute_value_id) errs.attribute_value_id = "Value is required";
+    if (Object.keys(errs).length) return setErrors(errs);
+    setSaving(true);
+    try {
+      await masterService.create("product-attribute-values", {
+        attribute_id: form.attribute_id,
+        attribute_value_id: form.attribute_value_id,
+        store_id: form.store_id || null,
+      });
+      toast.success("Attribute value added");
+      closeModal(); load();
+    } catch (err) { toast.error(err?.response?.data?.message || "Save failed"); }
+    finally { setSaving(false); }
+  };
+
+  const handleDelete = async () => {
+    try { await masterService.delete("product-attribute-values", deleteDialog.id); toast.success("Attribute value removed"); load(); }
+    catch { toast.error("Delete failed"); }
+    finally { setDeleteDialog({ open: false, id: null, label: "" }); }
+  };
+
+  const getPageNumbers = () => {
+    const pages = []; const delta = 2;
+    const left = Math.max(1, currentPage - delta); const right = Math.min(totalPages, currentPage + delta);
+    if (left > 1) { pages.push(1); if (left > 2) pages.push("..."); }
+    for (let i = left; i <= right; i++) pages.push(i);
+    if (right < totalPages) { if (right < totalPages - 1) pages.push("..."); pages.push(totalPages); }
+    return pages;
+  };
+
+  const storeMap = useMemo(() => Object.fromEntries(stores.map(s => [s.id, s.name])), [stores]);
+
+  return (
+    <MainLayout>
+      <div className="card">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
+          <div>
+            <strong className="ct" style={{ fontSize: 15 }}>Attribute Values</strong>
+            <p style={{ fontSize: 11, color: "var(--tx3)", marginTop: 2 }}>
+              Store-level attribute values used across Sales, Purchases and POS. Selection mode (single/multi) is set on the Attribute.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="srch w-full sm:w-auto sm:flex-1 sm:max-w-xs">
+              <span className="srch-ic"><Search size={13} /></span>
+              <input type="text" placeholder="Search attribute or value..." value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <select value={filterStore} onChange={e => setFilterStore(e.target.value)} style={psStyle}>
+              <option value="">All Stores</option>
+              {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--tx3)" }}>
+              <span>Show</span>
+              <select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} style={psStyle}>
+                {[25, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <Button variant="primary" size="sm" onClick={openCreate}><Plus size={13} strokeWidth={2.5} /><span>Add</span></Button>
+          </div>
+        </div>
+        <hr style={{ borderColor: "var(--bd)", margin: "0 0 12px" }} />
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr>
+                <th>Attribute</th>
+                <th>Value</th>
+                <th className="hidden lg:table-cell">Store</th>
+                <th style={{ width: 60 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>Loading...</td></tr>
+              ) : paged.length === 0 ? (
+                <tr><td colSpan={4} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>No attribute values configured</td></tr>
+              ) : paged.map(r => (
+                <tr key={r.id}>
+                  <td><span style={{ fontWeight: 600, color: "var(--tx)" }}>{r.attribute?.name || "—"}</span></td>
+                  <td><span style={{ background: "var(--abg)", color: "var(--accent)", borderRadius: "var(--r)", padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>{r.attribute_value?.value || "—"}</span></td>
+                  <td className="hidden lg:table-cell">
+                    {r.store_id ? (
+                      <span style={{ background: "var(--abg)", color: "var(--accent)", borderRadius: "var(--r)", padding: "2px 8px", fontSize: 11, fontWeight: 500 }}>
+                        {storeMap[r.store_id] || "—"}
+                      </span>
+                    ) : <span style={{ color: "var(--tx3)", fontSize: 11 }}>All Stores</span>}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className="hbtn" onClick={() => setDeleteDialog({ open: true, id: r.id, label: `${r.attribute?.name}: ${r.attribute_value?.value}` })} title="Remove"><Trash2 size={12} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!loading && filtered.length > 0 && (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4" style={{ fontSize: 12, color: "var(--tx3)" }}>
+            <span>Showing <strong style={{ color: "var(--tx)" }}>{(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filtered.length)}</strong> of <strong style={{ color: "var(--tx)" }}>{filtered.length}</strong></span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="hbtn" style={{ opacity: currentPage === 1 ? 0.4 : 1 }}><ChevronLeft size={13} /></button>
+                {getPageNumbers().map((page, i) => page === "..." ? <span key={`d-${i}`} style={{ padding: "0 4px" }}>…</span> : (
+                  <button key={page} onClick={() => setCurrentPage(page)} className="hbtn"
+                    style={currentPage === page ? { background: "var(--abg)", borderColor: "var(--accent)", color: "var(--accent)", width: 28, height: 28, fontSize: 12 } : { width: 28, height: 28, fontSize: 12, color: "var(--tx2)" }}>{page}</button>
+                ))}
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="hbtn" style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}><ChevronRight size={13} /></button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {modal && (
+        <Modal isOpen onClose={closeModal} title="Add Attribute Value" width={440}
+          footer={<><Button variant="ghost" size="sm" onClick={closeModal}>Cancel</Button><Button variant="primary" size="sm" disabled={saving} onClick={handleSave}>{saving ? "Saving..." : "Add"}</Button></>}
+        >
+          <div className="fg">
+            <label>Attribute <span style={{ color: "var(--red)" }}>*</span></label>
+            <select name="attribute_id" value={form.attribute_id} onChange={handleChange} style={errors.attribute_id ? { borderColor: "var(--red)" } : {}}>
+              <option value="">Select attribute...</option>
+              {attributes.map(a => <option key={a.id} value={a.id}>{a.name}{a.allow_multi_select ? " (multi)" : ""}</option>)}
+            </select>
+            {errors.attribute_id && <span style={{ fontSize: 11, color: "var(--red)" }}>{errors.attribute_id}</span>}
+          </div>
+          <div className="fg">
+            <label>Value <span style={{ color: "var(--red)" }}>*</span></label>
+            <select name="attribute_value_id" value={form.attribute_value_id} onChange={handleChange} disabled={!form.attribute_id} style={errors.attribute_value_id ? { borderColor: "var(--red)" } : {}}>
+              <option value="">Select value...</option>
+              {filteredAttrValues.map(v => <option key={v.id} value={v.id}>{v.value}</option>)}
+            </select>
+            {errors.attribute_value_id && <span style={{ fontSize: 11, color: "var(--red)" }}>{errors.attribute_value_id}</span>}
+          </div>
+          {currentStore?.id == null && stores.length > 0 && (
+            <div className="fg">
+              <label>Store Availability</label>
+              <select name="store_id" value={form.store_id || ""} onChange={handleChange}>
+                <option value="">All Stores</option>
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      <DeleteDialog isOpen={deleteDialog.open} onClose={() => setDeleteDialog({ open: false, id: null, label: "" })} onConfirm={handleDelete} label={deleteDialog.label} />
+    </MainLayout>
+  );
+}
