@@ -117,9 +117,13 @@ export const signup = async (req, res) => {
     // =============================
     // PERMISSIONS (FIXED)
     // =============================
-    const permissions = result.user.isSuperAdmin
-      ? (await prisma.permission.findMany()).map((p) => p.name)
-      : getUserPermissions(result.user.userRoles);
+    const permissions = result.user.isSuperAdmin ? (await prisma.permission.findMany()).map((p) => p.name) : getUserPermissions(result.user.userRoles);
+
+    const allStores = await prisma.store.findMany({
+      where: { tenantId: result.tenant.id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, code: true, storeType: true, logo: true },
+    });
 
     const token = generateToken(result.user);
 
@@ -147,13 +151,21 @@ export const signup = async (req, res) => {
           subscribedAt: result.user.tenant.subscribedAt,
         },
 
-        stores: [
-          {
-            id: result.store.id,
-            name: result.store.name,
-            storeType: result.store.storeType,
-          },
-        ],
+        stores: result.user.isSuperAdmin
+          ? allStores.map((store) => ({
+              id: store.id,
+              name: store.name,
+              code: store.code,
+              storeType: store.storeType,
+              logo: store.logo,
+            }))
+          : [
+              {
+                id: result.store.id,
+                name: result.store.name,
+                storeType: result.store.storeType,
+              },
+            ],
 
         roles: result.user.userRoles.map((ur) => ur.role.name),
       },
@@ -220,9 +232,7 @@ export const login = async (req, res) => {
     // =============================
     // FIXED PERMISSIONS LOGIC
     // =============================
-    const permissions = user.isSuperAdmin
-      ? (await prisma.permission.findMany()).map((p) => p.name)
-      : getUserPermissions(user.userRoles);
+    const permissions = user.isSuperAdmin ? (await prisma.permission.findMany()).map((p) => p.name) : getUserPermissions(user.userRoles);
 
     // Fetch the latest active subscription end date so the frontend can track expiry
     const activeSub = await prisma.subscription.findFirst({
@@ -230,6 +240,14 @@ export const login = async (req, res) => {
       orderBy: { endDate: "desc" },
       select: { endDate: true },
     });
+
+    const allStores = user.isSuperAdmin
+      ? await prisma.store.findMany({
+          where: { tenantId: user.tenantId },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, name: true, code: true, storeType: true, logo: true },
+        })
+      : null;
 
     const token = generateToken(user);
 
@@ -258,15 +276,23 @@ export const login = async (req, res) => {
           subscriptionEndsAt: activeSub?.endDate || null,
         },
 
-        stores: user.storeUsers.map((su) => ({
-          id: su.store.id,
-          name: su.store.name,
-          code: su.store.code,
-          storeType: su.store.storeType,
-          logo: su.store.logo,
-        })),
+        stores: user.isSuperAdmin
+          ? allStores.map((store) => ({
+              id: store.id,
+              name: store.name,
+              code: store.code,
+              storeType: store.storeType,
+              logo: store.logo,
+            }))
+          : user.storeUsers.map((su) => ({
+              id: su.store.id,
+              name: su.store.name,
+              code: su.store.code,
+              storeType: su.store.storeType,
+              logo: su.store.logo,
+            })),
 
-        currentStore: user.storeUsers[0]?.store || null,
+        currentStore: user.isSuperAdmin ? allStores[0] || null : user.storeUsers[0]?.store || null,
 
         permissions,
 
@@ -336,6 +362,14 @@ export const me = async (req, res) => {
       select: { endDate: true },
     });
 
+    const allStores = user.isSuperAdmin
+      ? await prisma.store.findMany({
+          where: { tenantId: user.tenantId },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, name: true, code: true, storeType: true, logo: true },
+        })
+      : null;
+
     res.json({
       id: user.id,
       firstName: user.firstName,
@@ -361,15 +395,23 @@ export const me = async (req, res) => {
         subscriptionEndsAt: activeSubMe?.endDate || null,
       },
 
-      stores: user.storeUsers.map((su) => ({
-        id: su.store.id,
-        name: su.store.name,
-        code: su.store.code,
-        storeType: su.store.storeType,
-        logo: su.store.logo,
-      })),
+      stores: user.isSuperAdmin
+        ? allStores.map((store) => ({
+            id: store.id,
+            name: store.name,
+            code: store.code,
+            storeType: store.storeType,
+            logo: store.logo,
+          }))
+        : user.storeUsers.map((su) => ({
+            id: su.store.id,
+            name: su.store.name,
+            code: su.store.code,
+            storeType: su.store.storeType,
+            logo: su.store.logo,
+          })),
 
-      currentStore: user.storeUsers[0]?.store || null,
+      currentStore: user.isSuperAdmin ? allStores[0] || null : user.storeUsers[0]?.store || null,
 
       roles: user.userRoles.map((ur) => ur.role.name),
     });

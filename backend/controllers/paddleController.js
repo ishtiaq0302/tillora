@@ -1,10 +1,7 @@
 import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 
-const PADDLE_API_BASE =
-  process.env.PADDLE_SANDBOX === "true"
-    ? "https://sandbox-api.paddle.com"
-    : "https://api.paddle.com";
+const PADDLE_API_BASE = process.env.PADDLE_SANDBOX === "true" ? "https://sandbox-api.paddle.com" : "https://api.paddle.com";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -38,16 +35,10 @@ function verifyWebhookSignature(rawBody, signatureHeader, secret) {
   if (Math.abs(Date.now() - tsMs) > 5 * 60 * 1000) return false;
 
   const signed = `${ts}:${rawBody}`;
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(signed, "utf8")
-    .digest("hex");
+  const expected = crypto.createHmac("sha256", secret).update(signed, "utf8").digest("hex");
 
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(h1, "hex"),
-      Buffer.from(expected, "hex")
-    );
+    return crypto.timingSafeEqual(Buffer.from(h1, "hex"), Buffer.from(expected, "hex"));
   } catch {
     return false;
   }

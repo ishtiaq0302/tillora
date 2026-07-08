@@ -274,7 +274,7 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
                   {t("switch_store", "header")}
                 </div>
                 <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                  {canViewAllStores &&
+                  {(canViewAllStores || user?.stores?.length > 1) &&
                     (() => {
                       const isActive = currentStore?.id == null;
                       return (

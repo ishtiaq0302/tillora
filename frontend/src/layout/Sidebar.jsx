@@ -1,19 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
-import {
-  LayoutDashboard, ShoppingCart, Receipt, TrendingDown, Package,
-  ClipboardList, Shuffle, Banknote, User, Factory, FolderOpen,
-  UtensilsCrossed, BarChart2, Store, ShieldCheck, Users, Globe,
-  Settings, LogOut, CreditCard, FlaskConical,
-} from "lucide-react";
+import { getUsers } from "../services/userService";
+import { LayoutDashboard, ShoppingCart, Receipt, TrendingDown, Package, ClipboardList, Shuffle, Banknote, User, Factory, FolderOpen, UtensilsCrossed, BarChart2, Store, ShieldCheck, Users, Globe, Settings, LogOut, CreditCard, FlaskConical } from "lucide-react";
 
 const NavItem = ({ to, icon, label, location, exact = false }) => {
-  const active =
-    exact || to === "/"
-      ? location.pathname === to
-      : location.pathname === to || location.pathname.startsWith(to + "/");
+  const active = exact || to === "/" ? location.pathname === to : location.pathname === to || location.pathname.startsWith(to + "/");
   return (
     <Link to={to} className={`ni ${active ? "active" : ""}`}>
       <div className="nic">{icon}</div>
@@ -52,12 +45,34 @@ const SubLink = ({ to, label, location }) => (
 
 const Sidebar = ({ sidebarOpen }) => {
   const location = useLocation();
-  const { logout, hasPermission } = useAuth();
+  const { logout, hasPermission, user } = useAuth();
   const { t } = useLanguage();
   const [openSubs, setOpenSubs] = useState({});
+  const [userLimit, setUserLimit] = useState(null);
 
-  const toggleSub = (key) =>
-    setOpenSubs((prev) => ({ ...prev, [key]: !prev[key] }));
+  useEffect(() => {
+    let mounted = true;
+    const loadUserLimit = async () => {
+      try {
+        const data = await getUsers();
+        if (!mounted) return;
+        setUserLimit({
+          maxUsers: data?.maxUsers ?? null,
+          currentCount: data?.currentCount ?? data?.users?.length ?? 0,
+        });
+      } catch {
+        if (mounted) setUserLimit(null);
+      }
+    };
+
+    loadUserLimit();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const toggleSub = (key) => setOpenSubs((prev) => ({ ...prev, [key]: !prev[key] }));
+  const isUserLimitReached = userLimit?.maxUsers != null && userLimit.currentCount >= userLimit.maxUsers;
 
   return (
     <>
@@ -79,39 +94,15 @@ const Sidebar = ({ sidebarOpen }) => {
 
         {/* INVENTORY */}
         <NavSection label={t("inventory_section", "nav")} />
-        <SubMenu
-          icon={<ClipboardList size={18} />}
-          label={t("products", "nav")}
-          openKey="products"
-          openSubs={openSubs}
-          toggleSub={toggleSub}
-          location={location}
-          paths={["/products"]}
-        >
+        <SubMenu icon={<ClipboardList size={18} />} label={t("products", "nav")} openKey="products" openSubs={openSubs} toggleSub={toggleSub} location={location} paths={["/products"]}>
           <SubLink to="/products" label={t("product_list", "nav")} location={location} />
           <SubLink to="/products/create" label={t("add_product", "nav")} location={location} />
         </SubMenu>
-        <SubMenu
-          icon={<Package size={18} />}
-          label={t("inventory", "nav")}
-          openKey="inventory"
-          openSubs={openSubs}
-          toggleSub={toggleSub}
-          location={location}
-          paths={["/inventory"]}
-        >
+        <SubMenu icon={<Package size={18} />} label={t("inventory", "nav")} openKey="inventory" openSubs={openSubs} toggleSub={toggleSub} location={location} paths={["/inventory"]}>
           <SubLink to="/inventory/stock-movements" label={t("stock_movements", "nav")} location={location} />
           <SubLink to="/inventory/store-products" label={t("store_inventory", "nav")} location={location} />
         </SubMenu>
-        <SubMenu
-          icon={<Shuffle size={18} />}
-          label={t("variants_batches", "nav")}
-          openKey="variants"
-          openSubs={openSubs}
-          toggleSub={toggleSub}
-          location={location}
-          paths={["/products/variants", "/products/batches"]}
-        >
+        <SubMenu icon={<Shuffle size={18} />} label={t("variants_batches", "nav")} openKey="variants" openSubs={openSubs} toggleSub={toggleSub} location={location} paths={["/products/variants", "/products/batches"]}>
           <SubLink to="/products/variants" label={t("product_variants", "nav")} location={location} />
           <SubLink to="/products/batches" label={t("product_batches", "nav")} location={location} />
         </SubMenu>
@@ -121,15 +112,7 @@ const Sidebar = ({ sidebarOpen }) => {
         <NavSection label={t("master_data", "nav")} />
         <NavItem to="/customers" icon={<User size={18} />} label={t("customers", "nav")} location={location} />
         <NavItem to="/suppliers" icon={<Factory size={18} />} label={t("suppliers", "nav")} location={location} />
-        <SubMenu
-          icon={<FolderOpen size={18} />}
-          label={t("catalog", "nav")}
-          openKey="catalog"
-          openSubs={openSubs}
-          toggleSub={toggleSub}
-          location={location}
-          paths={["/categories", "/brands", "/units", "/taxes", "/expense-categories", "/master/attributes"]}
-        >
+        <SubMenu icon={<FolderOpen size={18} />} label={t("catalog", "nav")} openKey="catalog" openSubs={openSubs} toggleSub={toggleSub} location={location} paths={["/categories", "/brands", "/units", "/taxes", "/expense-categories", "/master/attributes"]}>
           <SubLink to="/categories" label={t("categories", "nav")} location={location} />
           <SubLink to="/brands" label={t("brands", "nav")} location={location} />
           <SubLink to="/units" label={t("units", "nav")} location={location} />
@@ -147,51 +130,32 @@ const Sidebar = ({ sidebarOpen }) => {
         <NavItem to="/reports" icon={<BarChart2 size={18} />} label={t("reports", "nav")} location={location} />
 
         {/* ADMIN */}
-        {(hasPermission("stores.view") || hasPermission("roles.view") || hasPermission("users.view")) && (
+        {(user?.isSuperAdmin || hasPermission("stores.view") || hasPermission("roles.view") || hasPermission("users.view")) && (
           <>
             <NavSection label={t("admin", "nav")} />
-            {hasPermission("stores.view") && (
-              <NavItem to="/stores" icon={<Store size={18} />} label={t("stores", "nav")} location={location} />
-            )}
+            {hasPermission("stores.view") && <NavItem to="/stores" icon={<Store size={18} />} label={t("stores", "nav")} location={location} />}
             {hasPermission("roles.view") && (
-              <SubMenu
-                icon={<ShieldCheck size={18} />}
-                label={t("roles", "nav")}
-                openKey="roles"
-                openSubs={openSubs}
-                toggleSub={toggleSub}
-                location={location}
-                paths={["/roles"]}
-              >
+              <SubMenu icon={<ShieldCheck size={18} />} label={t("roles", "nav")} openKey="roles" openSubs={openSubs} toggleSub={toggleSub} location={location} paths={["/roles"]}>
                 <SubLink to="/roles" label={t("all_roles", "nav")} location={location} />
                 <SubLink to="/roles/create" label={t("create_role", "nav")} location={location} />
                 <SubLink to="/roles/permissions" label={t("permissions", "nav")} location={location} />
               </SubMenu>
             )}
             {hasPermission("users.view") && (
-              <SubMenu
-                icon={<Users size={18} />}
-                label={t("users", "nav")}
-                openKey="users"
-                openSubs={openSubs}
-                toggleSub={toggleSub}
-                location={location}
-                paths={["/users"]}
-              >
+              <SubMenu icon={<Users size={18} />} label={t("users", "nav")} openKey="users" openSubs={openSubs} toggleSub={toggleSub} location={location} paths={["/users"]}>
                 <SubLink to="/users" label={t("all_users", "nav")} location={location} />
-                <SubLink to="/users/create" label={t("create_user", "nav")} location={location} />
+                {isUserLimitReached ? (
+                  <Link to="/billing" className="si">
+                    <span className="sdot"></span>
+                    Upgrade Plan for More Users
+                  </Link>
+                ) : (
+                  <SubLink to="/users/create" label={t("create_user", "nav")} location={location} />
+                )}
                 <SubLink to="/users/stores" label={t("user_stores", "nav")} location={location} />
               </SubMenu>
             )}
-            <SubMenu
-              icon={<Globe size={18} />}
-              label={t("system", "nav")}
-              openKey="system"
-              openSubs={openSubs}
-              toggleSub={toggleSub}
-              location={location}
-              paths={["/admin"]}
-            >
+            <SubMenu icon={<Globe size={18} />} label={t("system", "nav")} openKey="system" openSubs={openSubs} toggleSub={toggleSub} location={location} paths={["/admin"]}>
               <SubLink to="/admin/languages" label={t("languages", "nav")} location={location} />
               <SubLink to="/admin/store-languages" label={t("store_languages", "nav")} location={location} />
               <SubLink to="/admin/translations" label={t("ui_translations", "nav")} location={location} />
@@ -209,7 +173,9 @@ const Sidebar = ({ sidebarOpen }) => {
         <NavItem to="/billing" icon={<CreditCard size={18} />} label="Billing" location={location} />
         <NavItem to="/settings" icon={<Settings size={18} />} label={t("settings", "nav")} location={location} />
         <div className="ni logout-item" onClick={logout} style={{ cursor: "pointer" }}>
-          <div className="nic"><LogOut size={18} /></div>
+          <div className="nic">
+            <LogOut size={18} />
+          </div>
           <span className="nl">{t("logout", "nav")}</span>
         </div>
       </div>

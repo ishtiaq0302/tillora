@@ -18,30 +18,46 @@ export const AuthProvider = ({ children }) => {
   // =========================================
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
-
     const storedStore = localStorage.getItem("currentStore");
 
     if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
-
       setUser(parsedUser);
 
       // =====================================
       // LOAD SAVED STORE
       // =====================================
-      if (storedStore) {
-        setCurrentStore(JSON.parse(storedStore));
+      if (storedStore && parsedUser?.stores?.length > 0) {
+        try {
+          const parsedStore = JSON.parse(storedStore);
+          const validStore = parsedUser.stores.find((s) => s.id === parsedStore?.id);
+          if (validStore) {
+            setCurrentStore(validStore);
+          } else {
+            const firstStore = parsedUser.stores[0];
+            setCurrentStore(firstStore);
+            localStorage.setItem("currentStore", JSON.stringify(firstStore));
+          }
+        } catch {
+          const firstStore = parsedUser.stores[0];
+          setCurrentStore(firstStore);
+          localStorage.setItem("currentStore", JSON.stringify(firstStore));
+        }
       }
 
       // =====================================
       // AUTO SELECT FIRST STORE
       // =====================================
-      else if (parsedUser?.stores && parsedUser.stores.length > 0) {
+      else if (!storedStore && parsedUser?.stores && parsedUser.stores.length > 0) {
         const firstStore = parsedUser.stores[0];
-
         setCurrentStore(firstStore);
-
         localStorage.setItem("currentStore", JSON.stringify(firstStore));
+      }
+
+      // Clear invalid currentStore when no valid stores exist
+      else if (storedStore && (!parsedUser?.stores || parsedUser.stores.length === 0)) {
+        localStorage.removeItem("currentStore");
+        setCurrentStore(null);
       }
     }
 
@@ -142,32 +158,22 @@ export const AuthProvider = ({ children }) => {
   const now = new Date();
 
   // Days remaining on trial (negative = expired)
-  const trialDaysRemaining = trialEndsAt
-    ? Math.ceil((new Date(trialEndsAt) - now) / (1000 * 60 * 60 * 24))
-    : null;
+  const trialDaysRemaining = trialEndsAt ? Math.ceil((new Date(trialEndsAt) - now) / (1000 * 60 * 60 * 24)) : null;
 
   // Days remaining on paid subscription (negative = expired)
-  const subscriptionDaysRemaining = subscriptionEndsAt
-    ? Math.ceil((new Date(subscriptionEndsAt) - now) / (1000 * 60 * 60 * 24))
-    : null;
+  const subscriptionDaysRemaining = subscriptionEndsAt ? Math.ceil((new Date(subscriptionEndsAt) - now) / (1000 * 60 * 60 * 24)) : null;
 
   // Trial expired
-  const isTrialExpired =
-    subscriptionStatus === "trial" &&
-    trialEndsAt != null &&
-    new Date(trialEndsAt) < now;
+  const isTrialExpired = subscriptionStatus === "trial" && trialEndsAt != null && new Date(trialEndsAt) < now;
 
   // Paid subscription expired (status is "active" but the subscription end date has passed)
-  const isSubscriptionExpired =
-    subscriptionStatus === "active" &&
-    subscriptionEndsAt != null &&
-    new Date(subscriptionEndsAt) < now;
+  const isSubscriptionExpired = subscriptionStatus === "active" && subscriptionEndsAt != null && new Date(subscriptionEndsAt) < now;
 
   // Account is locked when either trial or paid subscription has expired
   const isAccountLocked = isTrialExpired || isSubscriptionExpired;
 
   // True when user can see an "All Stores" aggregate view
-  const canViewAllStores = !!(user?.isSuperAdmin || (user?.stores?.length > 1));
+  const canViewAllStores = !!user?.isSuperAdmin;
 
   return (
     <AuthContext.Provider

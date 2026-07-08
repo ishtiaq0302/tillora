@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getUsers, deleteUser } from "../../services/userService";
 import toast from "react-hot-toast";
-import { Plus, Search, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, Eye, CreditCard } from "lucide-react";
 import Modal from "../component/Modal";
 import Button from "../component/Button";
 import Badge from "../component/Badge";
@@ -21,12 +21,18 @@ function UserDetailModal({ user, onClose }) {
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const Y = String(date.getFullYear());
     switch (user.dateFormat) {
-      case "d-m-Y": return `${d}-${m}-${Y}`;
-      case "m-d-Y": return `${m}-${d}-${Y}`;
-      case "Y-m-d": return `${Y}-${m}-${d}`;
-      case "d/m/Y": return `${d}/${m}/${Y}`;
-      case "m/d/Y": return `${m}/${d}/${Y}`;
-      default: return `${d}-${m}-${Y}`;
+      case "d-m-Y":
+        return `${d}-${m}-${Y}`;
+      case "m-d-Y":
+        return `${m}-${d}-${Y}`;
+      case "Y-m-d":
+        return `${Y}-${m}-${d}`;
+      case "d/m/Y":
+        return `${d}/${m}/${Y}`;
+      case "m/d/Y":
+        return `${m}/${d}/${Y}`;
+      default:
+        return `${d}-${m}-${Y}`;
     }
   };
 
@@ -39,9 +45,7 @@ function UserDetailModal({ user, onClose }) {
     { label: t("updated_at", "users"), value: formatDate(user.updatedAt) },
   ];
 
-  const avatarUrl = user.avatar
-    ? `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "")}/${user.avatar}`
-    : null;
+  const avatarUrl = user.avatar ? `${(import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "")}/${user.avatar}` : null;
 
   return (
     <Modal
@@ -52,9 +56,7 @@ function UserDetailModal({ user, onClose }) {
       title={
         <div className="flex items-center gap-2">
           <span>{user.name}</span>
-          <Badge variant={user.isActive ? "success" : "danger"}>
-            {user.isActive ? t("active", "users") : t("inactive", "users")}
-          </Badge>
+          <Badge variant={user.isActive ? "success" : "danger"}>{user.isActive ? t("active", "users") : t("inactive", "users")}</Badge>
         </div>
       }
       footer={
@@ -67,15 +69,14 @@ function UserDetailModal({ user, onClose }) {
         {avatarUrl ? (
           <img src={avatarUrl} alt="avatar" className="w-14 h-14 rounded-full object-cover border" />
         ) : (
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-semibold border"
-            style={{ background: "var(--abg)", color: "var(--accent)" }}
-          >
+          <div className="w-14 h-14 rounded-full flex items-center justify-center text-lg font-semibold border" style={{ background: "var(--abg)", color: "var(--accent)" }}>
             {(user.firstName?.[0] || "") + (user.lastName?.[0] || "")}
           </div>
         )}
         <div>
-          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--tx)" }}>{user.firstName} {user.lastName}</p>
+          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--tx)" }}>
+            {user.firstName} {user.lastName}
+          </p>
           <p style={{ fontSize: 11.5, color: "var(--tx3)" }}>{user.email}</p>
         </div>
       </div>
@@ -91,8 +92,14 @@ function UserDetailModal({ user, onClose }) {
 }
 
 const pageSizeStyle = {
-  background: "var(--inp)", border: "1px solid var(--inpbd)", borderRadius: "var(--r)",
-  padding: "3px 22px 3px 7px", fontSize: 12, color: "var(--tx)", fontFamily: "var(--font)", outline: "none",
+  background: "var(--inp)",
+  border: "1px solid var(--inpbd)",
+  borderRadius: "var(--r)",
+  padding: "3px 22px 3px 7px",
+  fontSize: 12,
+  color: "var(--tx)",
+  fontFamily: "var(--font)",
+  outline: "none",
 };
 
 export default function Users() {
@@ -100,6 +107,7 @@ export default function Users() {
   const navigate = useNavigate();
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [users, setUsers] = useState([]);
+  const [maxUsers, setMaxUsers] = useState(null);
   const [loading, setLoading] = useState(true);
   const [detailUser, setDetailUser] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null, label: "" });
@@ -112,6 +120,7 @@ export default function Users() {
       setLoading(true);
       const data = await getUsers();
       setUsers(Array.isArray(data) ? data : data?.users || []);
+      if (data?.maxUsers != null) setMaxUsers(data.maxUsers);
     } catch (err) {
       console.log(err);
       setUsers([]);
@@ -120,14 +129,15 @@ export default function Users() {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
   const filteredUsers = useMemo(() => {
     if (!search.trim()) return users;
     const terms = search.toLowerCase().split(" ").filter(Boolean);
     return users.filter((user) => {
-      const haystack = [user.firstName, user.lastName, user.email, user.phone, user.avatar, user.isSuperAdmin, user.isActive ? "active" : "inactive"]
-        .filter(Boolean).join(" ").toLowerCase();
+      const haystack = [user.firstName, user.lastName, user.email, user.phone, user.avatar, user.isSuperAdmin, user.isActive ? "active" : "inactive"].filter(Boolean).join(" ").toLowerCase();
       return terms.every((t) => haystack.includes(t));
     });
   }, [users, search]);
@@ -139,7 +149,9 @@ export default function Users() {
     return filteredUsers.slice(start, start + pageSize);
   }, [filteredUsers, currentPage, pageSize]);
 
-  useEffect(() => { setCurrentPage(1); }, [search, pageSize]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, pageSize]);
 
   const handleDelete = async () => {
     try {
@@ -156,20 +168,24 @@ export default function Users() {
     }
   };
 
-  const toggleSelect = (id) =>
-    setSelectedUsers((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+  const toggleSelect = (id) => setSelectedUsers((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
 
-  const toggleSelectAll = () =>
-    setSelectedUsers(selectedUsers.length === paginatedUsers.length ? [] : paginatedUsers.map((u) => u.id));
+  const toggleSelectAll = () => setSelectedUsers(selectedUsers.length === paginatedUsers.length ? [] : paginatedUsers.map((u) => u.id));
 
   const getPageNumbers = () => {
     const pages = [];
     const delta = 2;
     const left = Math.max(1, currentPage - delta);
     const right = Math.min(totalPages, currentPage + delta);
-    if (left > 1) { pages.push(1); if (left > 2) pages.push("..."); }
+    if (left > 1) {
+      pages.push(1);
+      if (left > 2) pages.push("...");
+    }
     for (let i = left; i <= right; i++) pages.push(i);
-    if (right < totalPages) { if (right < totalPages - 1) pages.push("..."); pages.push(totalPages); }
+    if (right < totalPages) {
+      if (right < totalPages - 1) pages.push("...");
+      pages.push(totalPages);
+    }
     return pages;
   };
 
@@ -179,10 +195,30 @@ export default function Users() {
 
       <div className="card">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
-          <strong className="ct" style={{ fontSize: 15, flexShrink: 0 }}>{t("title", "users")}</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <strong className="ct" style={{ fontSize: 15 }}>
+              {t("title", "users")}
+            </strong>
+            {maxUsers != null && (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "2px 9px",
+                  borderRadius: 20,
+                  background: users.length >= maxUsers ? "var(--rbg)" : users.length >= maxUsers * 0.8 ? "var(--ambg)" : "var(--gbg)",
+                  color: users.length >= maxUsers ? "var(--red)" : users.length >= maxUsers * 0.8 ? "var(--amber)" : "var(--green)",
+                }}
+              >
+                {users.length} / {maxUsers} users
+              </span>
+            )}
+          </div>
 
           <div className="srch w-full sm:w-auto sm:flex-1 sm:max-w-xs">
-            <span className="srch-ic"><Search size={13} /></span>
+            <span className="srch-ic">
+              <Search size={13} />
+            </span>
             <input type="text" placeholder={t("search_placeholder", "users")} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
@@ -190,7 +226,11 @@ export default function Users() {
             <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--tx3)" }}>
               <span>{t("show", "users")}</span>
               <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={pageSizeStyle}>
-                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -200,10 +240,17 @@ export default function Users() {
               </Button>
             )}
 
-            <Link to="/users/create" className="btn btn-p" style={{ fontSize: 12 }}>
-              <Plus size={13} strokeWidth={2.5} />
-              <span>{t("add", "common")}</span>
-            </Link>
+            {maxUsers != null && users.length >= maxUsers ? (
+              <Link to="/billing" className="btn btn-g" style={{ fontSize: 12 }}>
+                <CreditCard size={13} strokeWidth={2.5} />
+                <span>Upgrade Plan</span>
+              </Link>
+            ) : (
+              <button type="button" className="btn btn-p" style={{ fontSize: 12 }} onClick={() => navigate("/users/create")}>
+                <Plus size={13} strokeWidth={2.5} />
+                <span>Add User</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -214,11 +261,7 @@ export default function Users() {
             <thead>
               <tr>
                 <th style={{ width: 32 }}>
-                  <input type="checkbox"
-                    checked={paginatedUsers.length > 0 && selectedUsers.length === paginatedUsers.length}
-                    onChange={toggleSelectAll}
-                    style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }}
-                  />
+                  <input type="checkbox" checked={paginatedUsers.length > 0 && selectedUsers.length === paginatedUsers.length} onChange={toggleSelectAll} style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
                 </th>
                 <th className="hidden sm:table-cell">{t("full_name", "users")}</th>
                 <th className="hidden md:table-cell">{t("email", "users")}</th>
@@ -230,24 +273,29 @@ export default function Users() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>{t("loading", "users")}</td></tr>
+                <tr>
+                  <td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>
+                    {t("loading", "users")}
+                  </td>
+                </tr>
               ) : paginatedUsers.length === 0 ? (
-                <tr><td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>{t("no_users_found", "users")}</td></tr>
+                <tr>
+                  <td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>
+                    {t("no_users_found", "users")}
+                  </td>
+                </tr>
               ) : (
                 paginatedUsers.map((user) => (
                   <tr key={user.id} onClick={() => navigate(`/users/edit/${user.id}`)} style={{ cursor: "pointer" }}>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => toggleSelect(user.id)}
-                        style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
+                      <input type="checkbox" checked={selectedUsers.includes(user.id)} onChange={() => toggleSelect(user.id)} style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
                     </td>
                     <td className="hidden sm:table-cell">{user.firstName + " " + user.lastName || "-"}</td>
                     <td className="hidden md:table-cell">{user.email || "-"}</td>
                     <td className="hidden md:table-cell">{user.phone || "-"}</td>
                     <td className="hidden lg:table-cell">{user.isSuperAdmin ? t("yes", "users") : t("no", "users")}</td>
                     <td>
-                      <span className={`sta ${user.isActive ? "ok" : "er"}`}>
-                        {user.isActive ? t("active", "users") : t("inactive", "users")}
-                      </span>
+                      <span className={`sta ${user.isActive ? "ok" : "er"}`}>{user.isActive ? t("active", "users") : t("inactive", "users")}</span>
                     </td>
                     <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                       <button onClick={() => setDetailUser(user)} className="hbtn" title="View details">
@@ -278,15 +326,19 @@ export default function Users() {
                 </button>
                 {getPageNumbers().map((page, i) =>
                   page === "..." ? (
-                    <span key={`dots-${i}`} style={{ padding: "0 4px", color: "var(--tx3)" }}>…</span>
+                    <span key={`dots-${i}`} style={{ padding: "0 4px", color: "var(--tx3)" }}>
+                      …
+                    </span>
                   ) : (
-                    <button key={page} onClick={() => setCurrentPage(page)} className="hbtn"
-                      style={currentPage === page
-                        ? { background: "var(--abg)", borderColor: "var(--accent)", color: "var(--accent)", width: 28, height: 28, fontSize: 12 }
-                        : { width: 28, height: 28, fontSize: 12, color: "var(--tx2)" }}>
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className="hbtn"
+                      style={currentPage === page ? { background: "var(--abg)", borderColor: "var(--accent)", color: "var(--accent)", width: 28, height: 28, fontSize: 12 } : { width: 28, height: 28, fontSize: 12, color: "var(--tx2)" }}
+                    >
                       {page}
                     </button>
-                  )
+                  ),
                 )}
                 <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="hbtn" style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>
                   <ChevronRight size={13} />
@@ -297,12 +349,7 @@ export default function Users() {
         )}
       </div>
 
-      <DeleteDialog
-        isOpen={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, id: null, label: "" })}
-        onConfirm={handleDelete}
-        label={deleteDialog.label}
-      />
+      <DeleteDialog isOpen={deleteDialog.open} onClose={() => setDeleteDialog({ open: false, id: null, label: "" })} onConfirm={handleDelete} label={deleteDialog.label} />
     </MainLayout>
   );
 }

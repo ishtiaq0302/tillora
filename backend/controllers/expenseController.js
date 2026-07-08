@@ -4,9 +4,7 @@ const fmt = (e) => ({
   id: e.id,
   amount: Number(e.amount),
   notes: e.notes || null,
-  expense_date: e.expenseDate
-    ? e.expenseDate.toISOString().slice(0, 10)
-    : null,
+  expense_date: e.expenseDate ? e.expenseDate.toISOString().slice(0, 10) : null,
   category_id: e.categoryId || null,
   category: e.category ? { id: e.category.id, name: e.category.name } : null,
   store_id: e.storeId || null,
@@ -49,16 +47,14 @@ export const createExpense = async (req, res) => {
 export const getExpenses = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const storeId = req.storeId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const search = req.query.search || "";
 
     const expenses = await prisma.expense.findMany({
       where: {
         tenantId,
-        ...(storeId ? { storeId } : {}),
-        ...(search
-          ? { notes: { contains: search, mode: "insensitive" } }
-          : {}),
+        ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
+        ...(search ? { notes: { contains: search, mode: "insensitive" } } : {}),
       },
       orderBy: { expenseDate: "desc" },
       include: { category: true, store: true },
@@ -73,8 +69,13 @@ export const getExpenses = async (req, res) => {
 export const getExpense = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const expense = await prisma.expense.findFirst({
-      where: { id: req.params.id, tenantId },
+      where: {
+        id: req.params.id,
+        tenantId,
+        ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
+      },
       include: { category: true, store: true },
     });
 
@@ -100,9 +101,9 @@ export const updateExpense = async (req, res) => {
       where: { id: req.params.id },
       data: {
         amount: amount !== undefined ? Number(amount) : existing.amount,
-        notes: notes !== undefined ? (notes || null) : existing.notes,
+        notes: notes !== undefined ? notes || null : existing.notes,
         expenseDate: expense_date ? new Date(expense_date) : existing.expenseDate,
-        categoryId: category_id !== undefined ? (category_id || null) : existing.categoryId,
+        categoryId: category_id !== undefined ? category_id || null : existing.categoryId,
       },
       include: { category: true, store: true },
     });

@@ -104,19 +104,7 @@ export const createSale = async (req, res) => {
       return res.status(400).json({ message: "No store selected. Please select a store first." });
     }
 
-    const {
-      invoice_no,
-      customer_id,
-      payment_status,
-      sale_status,
-      subtotal,
-      discount,
-      tax,
-      shipping,
-      grand_total,
-      notes,
-      items,
-    } = req.body;
+    const { invoice_no, customer_id, payment_status, sale_status, subtotal, discount, tax, shipping, grand_total, notes, items } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ message: "At least one item is required" });
@@ -216,7 +204,7 @@ export const createSale = async (req, res) => {
 export const getSales = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const storeId = req.storeId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
     const search = req.query.search || "";
@@ -224,13 +212,10 @@ export const getSales = async (req, res) => {
 
     const where = {
       tenantId,
-      ...(storeId ? { storeId } : {}),
+      ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
       ...(search
         ? {
-            OR: [
-              { invoiceNo: { contains: search, mode: "insensitive" } },
-              { customer: { name: { contains: search, mode: "insensitive" } } },
-            ],
+            OR: [{ invoiceNo: { contains: search, mode: "insensitive" } }, { customer: { name: { contains: search, mode: "insensitive" } } }],
           }
         : {}),
     };
@@ -264,8 +249,13 @@ export const getSales = async (req, res) => {
 export const getSale = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const sale = await prisma.sale.findFirst({
-      where: { id: req.params.id, tenantId },
+      where: {
+        id: req.params.id,
+        tenantId,
+        ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
+      },
       include: {
         customer: true,
         store: { select: { id: true, name: true } },

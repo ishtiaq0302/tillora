@@ -10,15 +10,10 @@ const FORM = ({ form, onChange, errors, extras }) => {
   return (
     <>
       <div className="fg">
-        <label>Name <span style={{ color: "var(--red)" }}>*</span></label>
-        <input
-          name="name"
-          value={form.name || ""}
-          onChange={onChange}
-          autoFocus
-          placeholder="e.g. Chicken, Cheese, Tomato Sauce"
-          style={errors.name ? { borderColor: "var(--red)" } : {}}
-        />
+        <label>
+          Name <span style={{ color: "var(--red)" }}>*</span>
+        </label>
+        <input name="name" value={form.name || ""} onChange={onChange} autoFocus placeholder="e.g. Chicken, Cheese, Tomato Sauce" style={errors.name ? { borderColor: "var(--red)" } : {}} />
         {errors.name && <span style={{ fontSize: 11, color: "var(--red)" }}>{errors.name}</span>}
       </div>
 
@@ -27,22 +22,16 @@ const FORM = ({ form, onChange, errors, extras }) => {
         <select name="unit" value={form.unit || ""} onChange={onChange}>
           <option value="">— Select unit —</option>
           {UNITS.map((u) => (
-            <option key={u} value={u}>{u}</option>
+            <option key={u} value={u}>
+              {u}
+            </option>
           ))}
         </select>
       </div>
 
       <div className="fg">
         <label>Cost Price</label>
-        <input
-          name="cost_price"
-          type="number"
-          step="0.01"
-          min="0"
-          value={form.cost_price ?? 0}
-          onChange={onChange}
-          placeholder="0.00"
-        />
+        <input name="cost_price" type="number" step="0.01" min="0" value={form.cost_price ?? 0} onChange={onChange} placeholder="0.00" />
       </div>
 
       {currentStore?.id == null && stores.length > 0 && (
@@ -51,7 +40,9 @@ const FORM = ({ form, onChange, errors, extras }) => {
           <select name="store_id" value={form.store_id || ""} onChange={onChange}>
             <option value="">All Stores</option>
             {stores.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
             ))}
           </select>
         </div>
@@ -71,7 +62,7 @@ export default function Ingredients() {
       storeFilter={true}
       extraLoader={async () => {
         const res = await masterService.getAll("stores");
-        return { stores: Array.isArray(res.data) ? res.data : (res.data?.data || []) };
+        return { stores: Array.isArray(res.data) ? res.data : res.data?.data || [] };
       }}
       emptyForm={{ name: "", unit: "", cost_price: 0, store_id: "" }}
       validate={(form) => {
@@ -88,21 +79,12 @@ export default function Ingredients() {
         {
           label: "Unit",
           width: 90,
-          render: (r) =>
-            r.unit ? (
-              <span style={{ fontSize: 11, color: "var(--tx2)" }}>{r.unit}</span>
-            ) : (
-              <span style={{ color: "var(--tx3)" }}>—</span>
-            ),
+          render: (r) => (r.unit ? <span style={{ fontSize: 11, color: "var(--tx2)" }}>{r.unit}</span> : <span style={{ color: "var(--tx3)" }}>—</span>),
         },
         {
           label: "Cost Price",
           width: 110,
-          render: (r) => (
-            <span style={{ fontWeight: 600, color: "var(--tx)" }}>
-              {Number(r.cost_price).toLocaleString()}
-            </span>
-          ),
+          render: (r) => <span style={{ fontWeight: 600, color: "var(--tx)" }}>{Number(r.cost_price).toLocaleString()}</span>,
         },
         {
           label: "In Stock",

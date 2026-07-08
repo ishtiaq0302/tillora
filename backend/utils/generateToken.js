@@ -6,11 +6,12 @@ const generateToken = (user) => {
       id: user.id,
       tenantId: user.tenantId,
       email: user.email,
+      isSuperAdmin: user.isSuperAdmin || false,
     },
     process.env.JWT_SECRET,
     {
       expiresIn: "7d",
-    }
+    },
   );
 };
 

@@ -16,18 +16,16 @@ const fmt = (m) => ({
 export const getStockMovements = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const storeId = req.storeId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const search = req.query.search || "";
     const movementType = req.query.type || "";
 
     const movements = await prisma.stockMovement.findMany({
       where: {
         tenantId,
-        ...(storeId ? { storeId } : {}),
+        ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
         ...(movementType ? { movementType } : {}),
-        ...(search
-          ? { product: { name: { contains: search, mode: "insensitive" } } }
-          : {}),
+        ...(search ? { product: { name: { contains: search, mode: "insensitive" } } } : {}),
       },
       include: {
         product: { select: { id: true, name: true, sku: true } },
@@ -44,8 +42,13 @@ export const getStockMovements = async (req, res) => {
 export const getStockMovement = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const movement = await prisma.stockMovement.findFirst({
-      where: { id: req.params.id, tenantId },
+      where: {
+        id: req.params.id,
+        tenantId,
+        ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
+      },
       include: { product: { select: { id: true, name: true, sku: true } } },
     });
 

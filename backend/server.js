@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-dotenv.config();                                    // load .env (production defaults)
+dotenv.config(); // load .env (production defaults)
 dotenv.config({ path: ".env.local", override: true }); // override with local values if file exists
 
 import app from "./app.js";

@@ -2,6 +2,7 @@ import prisma from "../lib/prisma.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { ensureCanCreateResource, getTenantPlanLimits } from "../utils/subscriptionLimits.js";
 
 // =====================
 // MULTER CONFIG
@@ -53,38 +54,24 @@ async function getMaxStores(tenantId) {
 export const createStore = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const {
-      name,
-      code,
-      storeType,
-      address,
-      city,
-      state,
-      country,
-      zipCode,
-      phone,
-      email,
-      currency,
-      timezone,
-      dateFormat,
-      taxNumber,
-      isActive,
-    } = req.body;
+    const { name, code, storeType, address, city, state, country, zipCode, phone, email, currency, timezone, dateFormat, taxNumber, isActive } = req.body;
 
-    if (!name?.trim())
-      return res.status(400).json({ message: "Store name is required" });
-    if (!storeType?.trim())
-      return res.status(400).json({ message: "Store type is required" });
-    if (!currency?.trim())
-      return res.status(400).json({ message: "Currency is required" });
-    if (!timezone?.trim())
-      return res.status(400).json({ message: "Timezone is required" });
+    if (!name?.trim()) return res.status(400).json({ message: "Store name is required" });
+    if (!storeType?.trim()) return res.status(400).json({ message: "Store type is required" });
+    if (!currency?.trim()) return res.status(400).json({ message: "Currency is required" });
+    if (!timezone?.trim()) return res.status(400).json({ message: "Timezone is required" });
 
     // Email format check
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      return res.status(400).json({ message: "Invalid email address" });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Invalid email address" });
 
-    // ── Store limit check ──────────────────────────────────────────────────────
+    const canCreate = await ensureCanCreateResource(tenantId, "store");
+    if (!canCreate.allowed) {
+      return res.status(canCreate.status).json({
+        message: canCreate.message,
+        code: canCreate.code,
+      });
+    }
+
     const maxStores = await getMaxStores(tenantId);
     const currentCount = await prisma.store.count({ where: { tenantId } });
     if (currentCount >= maxStores) {
@@ -101,8 +88,7 @@ export const createStore = async (req, res) => {
       const existing = await prisma.store.findFirst({
         where: { tenantId, code },
       });
-      if (existing)
-        return res.status(400).json({ message: "Store code already exists" });
+      if (existing) return res.status(400).json({ message: "Store code already exists" });
     }
 
     const logo = req.file ? `/uploads/logos/${req.file.filename}` : null;
@@ -142,10 +128,9 @@ export const createStore = async (req, res) => {
 export const getStores = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const [stores, maxStores] = await Promise.all([
-      prisma.store.findMany({ where: { tenantId }, orderBy: { createdAt: "desc" } }),
-      getMaxStores(tenantId),
-    ]);
+    const where = req.user?.isSuperAdmin ? { tenantId } : req.allowedStoreIds?.length ? { tenantId, id: { in: req.allowedStoreIds } } : { tenantId, id: { in: [] } };
+
+    const [stores, maxStores] = await Promise.all([prisma.store.findMany({ where, orderBy: { createdAt: "desc" } }), getMaxStores(tenantId)]);
     res.json({ stores, maxStores, currentCount: stores.length });
   } catch (error) {
     console.log(error);
@@ -160,7 +145,10 @@ export const getStore = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
-    const store = await prisma.store.findFirst({ where: { id, tenantId } });
+
+    const where = req.user?.isSuperAdmin ? { id, tenantId } : req.allowedStoreIds?.length ? { AND: [{ id }, { tenantId }, { id: { in: req.allowedStoreIds } }] } : { AND: [{ id }, { tenantId }, { id: { in: [] } }] };
+
+    const store = await prisma.store.findFirst({ where });
     if (!store) return res.status(404).json({ message: "Store not found" });
     res.json(store);
   } catch (error) {
@@ -177,40 +165,23 @@ export const updateStore = async (req, res) => {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
 
-    const store = await prisma.store.findFirst({ where: { id, tenantId } });
+    const store = await prisma.store.findFirst({
+      where: req.user?.isSuperAdmin ? { id, tenantId } : req.allowedStoreIds?.length ? { AND: [{ id }, { tenantId }, { id: { in: req.allowedStoreIds } }] } : { AND: [{ id }, { tenantId }, { id: { in: [] } }] },
+    });
     if (!store) return res.status(404).json({ message: "Store not found" });
 
-    const {
-      name,
-      storeType,
-      code,
-      address,
-      city,
-      state,
-      country,
-      zipCode,
-      phone,
-      email,
-      taxNumber,
-      currency,
-      timezone,
-      dateFormat,
-      isActive,
-    } = req.body;
+    const { name, storeType, code, address, city, state, country, zipCode, phone, email, taxNumber, currency, timezone, dateFormat, isActive } = req.body;
 
-    if (name !== undefined && !name.trim())
-      return res.status(400).json({ message: "Store name cannot be empty" });
+    if (name !== undefined && !name.trim()) return res.status(400).json({ message: "Store name cannot be empty" });
 
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-      return res.status(400).json({ message: "Invalid email address" });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: "Invalid email address" });
 
     // Unique code check (exclude current store)
     if (code && code !== store.code) {
       const existing = await prisma.store.findFirst({
         where: { tenantId, code, NOT: { id } },
       });
-      if (existing)
-        return res.status(400).json({ message: "Store code already exists" });
+      if (existing) return res.status(400).json({ message: "Store code already exists" });
     }
 
     // Handle logo — replace, remove, or keep existing
@@ -244,12 +215,7 @@ export const updateStore = async (req, res) => {
         currency: currency ?? store.currency,
         timezone: timezone ?? store.timezone,
         dateFormat: dateFormat ?? store.dateFormat,
-        isActive:
-          isActive !== undefined
-            ? isActive === "false"
-              ? false
-              : true
-            : store.isActive,
+        isActive: isActive !== undefined ? (isActive === "false" ? false : true) : store.isActive,
         logo,
       },
     });
@@ -269,7 +235,9 @@ export const deleteStore = async (req, res) => {
     const tenantId = req.user.tenantId;
     const { id } = req.params;
 
-    const store = await prisma.store.findFirst({ where: { id, tenantId } });
+    const store = await prisma.store.findFirst({
+      where: req.user?.isSuperAdmin ? { id, tenantId } : req.allowedStoreIds?.length ? { AND: [{ id }, { tenantId }, { id: { in: req.allowedStoreIds } }] } : { AND: [{ id }, { tenantId }, { id: { in: [] } }] },
+    });
     if (!store) return res.status(404).json({ message: "Store not found" });
 
     // Delete logo file if exists

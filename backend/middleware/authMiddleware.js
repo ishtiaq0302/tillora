@@ -2,12 +2,7 @@ import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
 
 // These API prefixes are always accessible even when trial/subscription is expired
-const SUBSCRIPTION_EXEMPT_PREFIXES = [
-  "/api/auth",
-  "/api/subscriptions",
-  "/api/subscription-plans",
-  "/api/dashboard",
-];
+const SUBSCRIPTION_EXEMPT_PREFIXES = ["/api/auth", "/api/subscriptions", "/api/subscription-plans", "/api/dashboard"];
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -40,19 +35,13 @@ const authMiddleware = async (req, res, next) => {
     req.tenant = tenant;
 
     // Enforce subscription for non-exempt routes
-    const isExempt = SUBSCRIPTION_EXEMPT_PREFIXES.some((prefix) =>
-      req.originalUrl.startsWith(prefix)
-    );
+    const isExempt = SUBSCRIPTION_EXEMPT_PREFIXES.some((prefix) => req.originalUrl.startsWith(prefix));
 
     if (!isExempt) {
       const now = new Date();
 
       // ── Trial expired ──
-      if (
-        tenant.subscriptionStatus === "trial" &&
-        tenant.trialEndsAt &&
-        tenant.trialEndsAt < now
-      ) {
+      if (tenant.subscriptionStatus === "trial" && tenant.trialEndsAt && tenant.trialEndsAt < now) {
         return res.status(402).json({
           message: "Your free trial has expired. Please subscribe to continue.",
           code: "TRIAL_EXPIRED",
@@ -73,8 +62,7 @@ const authMiddleware = async (req, res, next) => {
 
         if (!validSub) {
           return res.status(402).json({
-            message:
-              "Your subscription has expired. Please renew to continue.",
+            message: "Your subscription has expired. Please renew to continue.",
             code: "SUBSCRIPTION_EXPIRED",
           });
         }
@@ -85,11 +73,36 @@ const authMiddleware = async (req, res, next) => {
     // STORE VALIDATION
     // =========================
     const storeId = req.headers["x-store-id"];
+    const WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"];
 
-    if (storeId) {
+    let allowedStoreIds = [];
+
+    if (!decoded.isSuperAdmin) {
+      const assignedStores = await prisma.storeUser.findMany({
+        where: {
+          userId: decoded.id,
+          store: { tenantId: decoded.tenantId },
+        },
+        select: { storeId: true },
+        orderBy: { store: { createdAt: "asc" } },
+      });
+
+      allowedStoreIds = assignedStores.map((assignment) => assignment.storeId);
+      req.allowedStoreIds = allowedStoreIds;
+
+      if (allowedStoreIds.length === 0 && WRITE_METHODS.includes(req.method)) {
+        return res.status(403).json({
+          message: "No store assigned. You cannot add or update data without a store assignment.",
+        });
+      }
+    }
+
+    const effectiveStoreId = storeId || allowedStoreIds[0] || null;
+
+    if (effectiveStoreId) {
       if (!decoded.isSuperAdmin) {
         const access = await prisma.storeUser.findFirst({
-          where: { storeId, userId: decoded.id },
+          where: { storeId: effectiveStoreId, userId: decoded.id },
         });
 
         if (!access) {
@@ -99,7 +112,9 @@ const authMiddleware = async (req, res, next) => {
         }
       }
 
-      req.storeId = storeId;
+      req.storeId = effectiveStoreId;
+    } else {
+      req.storeId = null;
     }
 
     next();

@@ -2,6 +2,7 @@ import MainLayout from "../../layout/MainLayout";
 import { useEffect, useState, useMemo } from "react";
 import { Search, ChevronLeft, ChevronRight, Store } from "lucide-react";
 import api from "../../services/api";
+import { useAuth } from "../../context/AuthContext";
 
 import toast from "react-hot-toast";
 import Modal from "../component/Modal";
@@ -26,25 +27,12 @@ function AssignStoresModal({ user, stores, onClose, onSave }) {
   const filteredStores = useMemo(() => {
     if (!storeSearch.trim()) return stores;
     const q = storeSearch.toLowerCase();
-    return stores.filter(
-      (s) =>
-        s.name?.toLowerCase().includes(q) ||
-        s.code?.toLowerCase().includes(q) ||
-        s.city?.toLowerCase().includes(q),
-    );
+    return stores.filter((s) => s.name?.toLowerCase().includes(q) || s.code?.toLowerCase().includes(q) || s.city?.toLowerCase().includes(q));
   }, [stores, storeSearch]);
 
-  const toggleStore = (id) =>
-    setSelectedStores((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
-    );
+  const toggleStore = (id) => setSelectedStores((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
 
-  const toggleAll = () =>
-    setSelectedStores(
-      selectedStores.length === filteredStores.length
-        ? []
-        : filteredStores.map((s) => s.id),
-    );
+  const toggleAll = () => setSelectedStores(selectedStores.length === filteredStores.length ? [] : filteredStores.map((s) => s.id));
 
   const handleSave = async () => {
     setSaving(true);
@@ -97,25 +85,14 @@ function AssignStoresModal({ user, stores, onClose, onSave }) {
           <span className="srch-ic">
             <Search size={13} />
           </span>
-          <input
-            type="text"
-            placeholder="Search stores…"
-            value={storeSearch}
-            onChange={(e) => setStoreSearch(e.target.value)}
-          />
+          <input type="text" placeholder="Search stores…" value={storeSearch} onChange={(e) => setStoreSearch(e.target.value)} />
         </div>
 
         {/* Select all row */}
-        <div
-          className="flex items-center gap-2"
-          style={{ fontSize: 12, color: "var(--tx3)" }}
-        >
+        <div className="flex items-center gap-2" style={{ fontSize: 12, color: "var(--tx3)" }}>
           <input
             type="checkbox"
-            checked={
-              filteredStores.length > 0 &&
-              filteredStores.every((s) => selectedStores.includes(s.id))
-            }
+            checked={filteredStores.length > 0 && filteredStores.every((s) => selectedStores.includes(s.id))}
             onChange={toggleAll}
             style={{
               width: 12,
@@ -125,11 +102,7 @@ function AssignStoresModal({ user, stores, onClose, onSave }) {
             }}
           />
           <span>Select all ({filteredStores.length})</span>
-          {selectedStores.length > 0 && (
-            <span style={{ color: "var(--accent)", marginLeft: "auto" }}>
-              {selectedStores.length} selected
-            </span>
-          )}
+          {selectedStores.length > 0 && <span style={{ color: "var(--accent)", marginLeft: "auto" }}>{selectedStores.length} selected</span>}
         </div>
 
         <hr style={{ borderColor: "var(--bd)", margin: 0 }} />
@@ -145,9 +118,7 @@ function AssignStoresModal({ user, stores, onClose, onSave }) {
           }}
         >
           {filteredStores.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--tx3)", padding: "8px 0" }}>
-              No stores found
-            </p>
+            <p style={{ fontSize: 12, color: "var(--tx3)", padding: "8px 0" }}>No stores found</p>
           ) : (
             filteredStores.map((store) => (
               <label
@@ -159,12 +130,8 @@ function AssignStoresModal({ user, stores, onClose, onSave }) {
                   padding: "6px 8px",
                   borderRadius: "var(--r)",
                   cursor: "pointer",
-                  background: selectedStores.includes(store.id)
-                    ? "var(--abg)"
-                    : "transparent",
-                  border: selectedStores.includes(store.id)
-                    ? "1px solid var(--accent)"
-                    : "1px solid transparent",
+                  background: selectedStores.includes(store.id) ? "var(--abg)" : "transparent",
+                  border: selectedStores.includes(store.id) ? "1px solid var(--accent)" : "1px solid transparent",
                   transition: "background 0.15s, border-color 0.15s",
                 }}
               >
@@ -181,16 +148,9 @@ function AssignStoresModal({ user, stores, onClose, onSave }) {
                   }}
                 />
                 <span style={{ flex: 1, fontWeight: 500 }}>{store.name}</span>
-                {store.code && (
-                  <span style={{ color: "var(--tx3)", fontSize: 11 }}>
-                    {store.code}
-                  </span>
-                )}
+                {store.code && <span style={{ color: "var(--tx3)", fontSize: 11 }}>{store.code}</span>}
                 {store.isActive !== undefined && (
-                  <span
-                    className={`sta ${store.isActive ? "ok" : "er"}`}
-                    style={{ fontSize: 10 }}
-                  >
+                  <span className={`sta ${store.isActive ? "ok" : "er"}`} style={{ fontSize: 10 }}>
                     {store.isActive ? "Active" : "Inactive"}
                   </span>
                 )}
@@ -207,6 +167,7 @@ function AssignStoresModal({ user, stores, onClose, onSave }) {
 // MAIN COMPONENT
 // =====================
 export default function UserStoresPage() {
+  const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -223,12 +184,9 @@ export default function UserStoresPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [usersRes, storesRes] = await Promise.all([
-        api.get("/users"),
-        api.get("/stores"),
-      ]);
-      setUsers(Array.isArray(usersRes.data) ? usersRes.data.filter((u) => !u.isSuperAdmin) : []);
-      setStores(Array.isArray(storesRes.data) ? storesRes.data : []);
+      const [usersRes, storesRes] = await Promise.all([api.get("/users"), api.get("/stores")]);
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : Array.isArray(usersRes.data?.users) ? usersRes.data.users : []);
+      setStores(Array.isArray(storesRes.data) ? storesRes.data : Array.isArray(storesRes.data?.stores) ? storesRes.data.stores : []);
     } catch (err) {
       console.log(err);
       setUsers([]);
@@ -249,16 +207,7 @@ export default function UserStoresPage() {
     if (!search.trim()) return users;
     const terms = search.toLowerCase().split(" ").filter(Boolean);
     return users.filter((u) => {
-      const haystack = [
-        u.firstName,
-        u.lastName,
-        u.email,
-        u.role,
-        u.stores?.map((s) => s.name).join(" "),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+      const haystack = [u.firstName, u.lastName, u.email, u.role, u.stores?.map((s) => s.name).join(" ")].filter(Boolean).join(" ").toLowerCase();
       return terms.every((t) => haystack.includes(t));
     });
   }, [users, search]);
@@ -311,12 +260,7 @@ export default function UserStoresPage() {
 
   return (
     <MainLayout>
-      <AssignStoresModal
-        user={assignUser}
-        stores={stores}
-        onClose={() => setAssignUser(null)}
-        onSave={handleSave}
-      />
+      <AssignStoresModal user={assignUser} stores={stores} onClose={() => setAssignUser(null)} onSave={handleSave} />
 
       <div className="card">
         {/* ── HEADER ── */}
@@ -331,21 +275,13 @@ export default function UserStoresPage() {
             <span className="srch-ic">
               <Search size={13} />
             </span>
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <input type="text" placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
           {/* Controls row */}
           <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
             {/* Page size */}
-            <div
-              className="flex items-center gap-1.5"
-              style={{ fontSize: 12, color: "var(--tx3)" }}
-            >
+            <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--tx3)" }}>
               <span>Show</span>
               <select
                 value={pageSize}
@@ -388,19 +324,13 @@ export default function UserStoresPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td
-                    colSpan="5"
-                    style={{ textAlign: "center", color: "var(--tx3)" }}
-                  >
+                  <td colSpan="5" style={{ textAlign: "center", color: "var(--tx3)" }}>
                     Loading...
                   </td>
                 </tr>
               ) : paginatedUsers.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan="5"
-                    style={{ textAlign: "center", color: "var(--tx3)" }}
-                  >
+                  <td colSpan="5" style={{ textAlign: "center", color: "var(--tx3)" }}>
                     No users found
                   </td>
                 </tr>
@@ -420,24 +350,14 @@ export default function UserStoresPage() {
                               {s.name}
                             </Badge>
                           ))}
-                          {u.stores.length > 3 && (
-                            <Badge variant="default">
-                              +{u.stores.length - 3} more
-                            </Badge>
-                          )}
+                          {u.stores.length > 3 && <Badge variant="default">+{u.stores.length - 3} more</Badge>}
                         </div>
                       ) : (
-                        <span style={{ fontSize: 12, color: "var(--tx3)" }}>
-                          None
-                        </span>
+                        <span style={{ fontSize: 12, color: "var(--tx3)" }}>None</span>
                       )}
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setAssignUser(u)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setAssignUser(u)}>
                         <Store size={12} />
                         <span>Assign</span>
                       </Button>
@@ -451,42 +371,26 @@ export default function UserStoresPage() {
 
         {/* ── FOOTER ── */}
         {!loading && filteredUsers.length > 0 && (
-          <div
-            className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4"
-            style={{ fontSize: 12, color: "var(--tx3)" }}
-          >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4" style={{ fontSize: 12, color: "var(--tx3)" }}>
             {/* Record count */}
             <span>
               Showing{" "}
               <strong style={{ color: "var(--tx)" }}>
-                {(currentPage - 1) * pageSize + 1}–
-                {Math.min(currentPage * pageSize, filteredUsers.length)}
+                {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredUsers.length)}
               </strong>{" "}
-              of{" "}
-              <strong style={{ color: "var(--tx)" }}>
-                {filteredUsers.length}
-              </strong>{" "}
-              users
+              of <strong style={{ color: "var(--tx)" }}>{filteredUsers.length}</strong> users
             </span>
 
             {/* Page buttons */}
             {totalPages > 1 && (
               <div className="flex items-center gap-1 flex-wrap">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="hbtn"
-                  style={{ opacity: currentPage === 1 ? 0.4 : 1 }}
-                >
+                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="hbtn" style={{ opacity: currentPage === 1 ? 0.4 : 1 }}>
                   <ChevronLeft size={13} />
                 </button>
 
                 {getPageNumbers().map((page, i) =>
                   page === "..." ? (
-                    <span
-                      key={`dots-${i}`}
-                      style={{ padding: "0 4px", color: "var(--tx3)" }}
-                    >
+                    <span key={`dots-${i}`} style={{ padding: "0 4px", color: "var(--tx3)" }}>
                       …
                     </span>
                   ) : (
@@ -517,14 +421,7 @@ export default function UserStoresPage() {
                   ),
                 )}
 
-                <button
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="hbtn"
-                  style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}
-                >
+                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="hbtn" style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>
                   <ChevronRight size={13} />
                 </button>
               </div>

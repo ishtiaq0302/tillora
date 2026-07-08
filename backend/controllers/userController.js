@@ -1,6 +1,7 @@
 import prisma from "../lib/prisma.js";
 import bcrypt from "bcryptjs";
 import fs from "fs";
+import { ensureCanCreateResource, getTenantPlanLimits } from "../utils/subscriptionLimits.js";
 
 // ======================================================
 // CREATE USER
@@ -24,9 +25,7 @@ export const createUser = async (req, res) => {
       }
     }
 
-    const avatar = req.file
-      ? req.file.path.replace(/\\/g, "/")
-      : undefined;
+    const avatar = req.file ? req.file.path.replace(/\\/g, "/") : undefined;
 
     // VALIDATION
     if (!firstName || !email || !password) {
@@ -35,7 +34,6 @@ export const createUser = async (req, res) => {
       });
     }
 
-    // CHECK EMAIL EXISTS
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -43,6 +41,25 @@ export const createUser = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({
         message: "Email already exists",
+      });
+    }
+
+    const currentUserCount = await prisma.user.count({ where: { tenantId } });
+    const canCreate = await ensureCanCreateResource(tenantId, "user", currentUserCount);
+    if (!canCreate.allowed) {
+      return res.status(canCreate.status).json({
+        message: canCreate.message,
+        code: canCreate.code,
+      });
+    }
+
+    const limits = await getTenantPlanLimits(tenantId);
+    if (limits.subscriptionStatus !== "trial" && currentUserCount >= limits.maxUsers) {
+      return res.status(403).json({
+        message: `Your current plan allows up to ${limits.maxUsers} user${limits.maxUsers !== 1 ? "s" : ""}. Please upgrade your subscription to add more users.`,
+        code: "USER_LIMIT_REACHED",
+        maxUsers: limits.maxUsers,
+        currentCount: currentUserCount,
       });
     }
 
@@ -98,29 +115,32 @@ export const getUsers = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
 
-    const users = await prisma.user.findMany({
-      where: {
-        tenantId,
-      },
-
-      orderBy: {
-        createdAt: "desc",
-      },
-
-      include: {
-        userRoles: {
-          include: {
-            role: true,
-          },
+    const [users, limits] = await Promise.all([
+      prisma.user.findMany({
+        where: {
+          tenantId,
         },
 
-        storeUsers: {
-          include: {
-            store: true,
+        orderBy: {
+          createdAt: "desc",
+        },
+
+        include: {
+          userRoles: {
+            include: {
+              role: true,
+            },
+          },
+
+          storeUsers: {
+            include: {
+              store: true,
+            },
           },
         },
-      },
-    });
+      }),
+      getTenantPlanLimits(tenantId),
+    ]);
 
     // FORMAT USERS
     const formattedUsers = users.map((user) => ({
@@ -153,7 +173,13 @@ export const getUsers = async (req, res) => {
         })) || [],
     }));
 
-    res.json(formattedUsers);
+    const effectiveMaxUsers = limits.subscriptionStatus === "trial" ? 3 : (limits.maxUsers ?? 5);
+
+    res.json({
+      users: formattedUsers,
+      maxUsers: effectiveMaxUsers,
+      currentCount: formattedUsers.length,
+    });
   } catch (error) {
     console.log(error);
 
@@ -240,15 +266,9 @@ export const updateUser = async (req, res) => {
 
     const { firstName, lastName, email, password, phone } = req.body;
 
-    const isSuperAdmin =
-      req.body.isSuperAdmin !== undefined
-        ? req.body.isSuperAdmin === "true"
-        : existingUser.isSuperAdmin;
+    const isSuperAdmin = req.body.isSuperAdmin !== undefined ? req.body.isSuperAdmin === "true" : existingUser.isSuperAdmin;
 
-    const isActive =
-      req.body.isActive !== undefined
-        ? req.body.isActive === "true"
-        : existingUser.isActive;
+    const isActive = req.body.isActive !== undefined ? req.body.isActive === "true" : existingUser.isActive;
 
     let roleIds = null;
     if (req.body.roleIds !== undefined) {
@@ -259,9 +279,7 @@ export const updateUser = async (req, res) => {
       }
     }
 
-    const avatar = req.file
-      ? req.file.path.replace(/\\/g, "/")
-      : existingUser.avatar;
+    const avatar = req.file ? req.file.path.replace(/\\/g, "/") : existingUser.avatar;
 
     if (req.file && existingUser.avatar) {
       fs.unlink(existingUser.avatar, (err) => {

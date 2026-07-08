@@ -10,6 +10,7 @@ import masterService from "../../services/masterService";
 import useStoreRefresh from "../../hooks/useStoreRefresh";
 import { useLanguage } from "../../context/LanguageContext";
 import { printSaleInvoice } from "../../utils/printInvoice";
+import { useAuth } from "../../context/AuthContext";
 
 const pageSizeStyle = {
   background: "var(--inp)",
@@ -32,6 +33,7 @@ const PAY_STATUS = {
 const normalizeListResponse = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload.stores)) return payload.stores;
   if (Array.isArray(payload.data)) return payload.data;
   if (Array.isArray(payload.items)) return payload.items;
   if (Array.isArray(payload.results)) return payload.results;
@@ -41,6 +43,7 @@ const normalizeListResponse = (payload) => {
 };
 
 export default function Sales() {
+  const { user, currentStore } = useAuth();
   const { t } = useLanguage();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,6 +76,19 @@ export default function Sales() {
       .then((res) => setStores(normalizeListResponse(res?.data ?? res)))
       .catch(() => {});
   }, [loadData]);
+
+  useEffect(() => {
+    setFilterStore(currentStore?.id ?? null);
+  }, [currentStore?.id]);
+  // useEffect(() => {
+  //   if (!currentStore?.id) {
+  //     masterService
+  //       .getAll("stores")
+  //       .then((r) => setStores(normalizeStoreList(r.data?.data || r.data || [])))
+  //       .catch(() => {});
+  //   }
+  // }, [currentStore?.id]);
+
   useStoreRefresh(loadData);
 
   const filtered = useMemo(() => {
@@ -253,14 +269,15 @@ export default function Sales() {
                 {t("delete", "common")} ({selectedItems.length})
               </Button>
             )}
-            <select value={filterStore} onChange={(e) => setFilterStore(e.target.value)} style={pageSizeStyle}>
+
+            {/* <select value={filterStore} onChange={(e) => setFilterStore(e.target.value)} style={pageSizeStyle}>
               <option value="">{t("all_stores", "common")}</option>
               {stores.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
               ))}
-            </select>
+            </select> */}
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={pageSizeStyle}>
               <option value="">{t("all_status", "common")}</option>
               <option value="paid">{t("paid", "common")}</option>

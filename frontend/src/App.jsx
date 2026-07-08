@@ -80,89 +80,418 @@ function App() {
         <Route path="/signup" element={<Signup />} />
 
         {/* DASHBOARD */}
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
 
         {/* POS */}
-        <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+        <Route
+          path="/pos"
+          element={
+            <ProtectedRoute>
+              <POS />
+            </ProtectedRoute>
+          }
+        />
 
         {/* SALES */}
-        <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
-        <Route path="/sales/create" element={<ProtectedRoute><SaleForm /></ProtectedRoute>} />
+        <Route
+          path="/sales"
+          element={
+            <ProtectedRoute>
+              <Sales />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/sales/create"
+          element={
+            <ProtectedRoute>
+              <SaleForm />
+            </ProtectedRoute>
+          }
+        />
 
         {/* PURCHASES */}
-        <Route path="/purchases" element={<ProtectedRoute><Purchases /></ProtectedRoute>} />
-        <Route path="/purchases/create" element={<ProtectedRoute><PurchaseForm /></ProtectedRoute>} />
+        <Route
+          path="/purchases"
+          element={
+            <ProtectedRoute>
+              <Purchases />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/purchases/create"
+          element={
+            <ProtectedRoute>
+              <PurchaseForm />
+            </ProtectedRoute>
+          }
+        />
 
         {/* EXPENSES */}
-        <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+        <Route
+          path="/expenses"
+          element={
+            <ProtectedRoute>
+              <Expenses />
+            </ProtectedRoute>
+          }
+        />
 
         {/* PRODUCTS */}
-        <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-        <Route path="/products/create" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
-        <Route path="/products/edit/:id" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
+        <Route
+          path="/products"
+          element={
+            <ProtectedRoute>
+              <Products />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/products/create"
+          element={
+            <ProtectedRoute>
+              <ProductForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/products/edit/:id"
+          element={
+            <ProtectedRoute>
+              <ProductForm />
+            </ProtectedRoute>
+          }
+        />
 
         {/* INVENTORY */}
-        <Route path="/inventory/stock-movements" element={<ProtectedRoute><StockMovements /></ProtectedRoute>} />
-        <Route path="/inventory/store-products" element={<ProtectedRoute><StoreProducts /></ProtectedRoute>} />
+        <Route
+          path="/inventory/stock-movements"
+          element={
+            <ProtectedRoute>
+              <StockMovements />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/inventory/store-products"
+          element={
+            <ProtectedRoute>
+              <StoreProducts />
+            </ProtectedRoute>
+          }
+        />
 
         {/* PRODUCT DETAILS */}
-        <Route path="/products/variants" element={<ProtectedRoute><ProductVariants /></ProtectedRoute>} />
-        <Route path="/products/batches" element={<ProtectedRoute><ProductBatches /></ProtectedRoute>} />
+        <Route
+          path="/products/variants"
+          element={
+            <ProtectedRoute>
+              <ProductVariants />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/products/batches"
+          element={
+            <ProtectedRoute>
+              <ProductBatches />
+            </ProtectedRoute>
+          }
+        />
 
         {/* TRANSLATIONS */}
-        <Route path="/admin/product-translations" element={<ProtectedRoute><ProductTranslations /></ProtectedRoute>} />
-        <Route path="/admin/category-translations" element={<ProtectedRoute><CategoryTranslations /></ProtectedRoute>} />
-        <Route path="/admin/store-languages" element={<ProtectedRoute><StoreLanguages /></ProtectedRoute>} />
-        <Route path="/admin/translations" element={<ProtectedRoute><Translations /></ProtectedRoute>} />
+        <Route
+          path="/admin/product-translations"
+          element={
+            <ProtectedRoute>
+              <ProductTranslations />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/category-translations"
+          element={
+            <ProtectedRoute>
+              <CategoryTranslations />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/store-languages"
+          element={
+            <ProtectedRoute>
+              <StoreLanguages />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/translations"
+          element={
+            <ProtectedRoute>
+              <Translations />
+            </ProtectedRoute>
+          }
+        />
 
         {/* MASTER DATA */}
-        <Route path="/categories" element={<ProtectedRoute><Categories /></ProtectedRoute>} />
-        <Route path="/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
-        <Route path="/units" element={<ProtectedRoute><Units /></ProtectedRoute>} />
-        <Route path="/taxes" element={<ProtectedRoute><Taxes /></ProtectedRoute>} />
-        <Route path="/expense-categories" element={<ProtectedRoute><ExpenseCategories /></ProtectedRoute>} />
-        <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
-        <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
-        <Route path="/master/attributes" element={<ProtectedRoute><Attributes /></ProtectedRoute>} />
-        <Route path="/master/attributes/:id/values" element={<ProtectedRoute><AttributeValues /></ProtectedRoute>} />
-        <Route path="/ingredients" element={<ProtectedRoute><Ingredients /></ProtectedRoute>} />
+        <Route
+          path="/categories"
+          element={
+            <ProtectedRoute>
+              <Categories />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/brands"
+          element={
+            <ProtectedRoute>
+              <Brands />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/units"
+          element={
+            <ProtectedRoute>
+              <Units />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/taxes"
+          element={
+            <ProtectedRoute>
+              <Taxes />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/expense-categories"
+          element={
+            <ProtectedRoute>
+              <ExpenseCategories />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/customers"
+          element={
+            <ProtectedRoute>
+              <Customers />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/suppliers"
+          element={
+            <ProtectedRoute>
+              <Suppliers />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/master/attributes"
+          element={
+            <ProtectedRoute>
+              <Attributes />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/master/attributes/:id/values"
+          element={
+            <ProtectedRoute>
+              <AttributeValues />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ingredients"
+          element={
+            <ProtectedRoute>
+              <Ingredients />
+            </ProtectedRoute>
+          }
+        />
 
         {/* RESTAURANT */}
-        <Route path="/restaurant/tables" element={<ProtectedRoute><Tables /></ProtectedRoute>} />
+        <Route
+          path="/restaurant/tables"
+          element={
+            <ProtectedRoute>
+              <Tables />
+            </ProtectedRoute>
+          }
+        />
 
         {/* CASH REGISTERS */}
-        <Route path="/cash-registers" element={<ProtectedRoute><CashRegisters /></ProtectedRoute>} />
+        <Route
+          path="/cash-registers"
+          element={
+            <ProtectedRoute>
+              <CashRegisters />
+            </ProtectedRoute>
+          }
+        />
 
         {/* REPORTS */}
-        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route
+          path="/reports"
+          element={
+            <ProtectedRoute>
+              <Reports />
+            </ProtectedRoute>
+          }
+        />
 
         {/* SETTINGS */}
-        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
 
         {/* BILLING */}
-        <Route path="/billing" element={<ProtectedRoute><Billing /></ProtectedRoute>} />
+        <Route
+          path="/billing"
+          element={
+            <ProtectedRoute>
+              <Billing />
+            </ProtectedRoute>
+          }
+        />
 
         {/* ADMIN */}
-        <Route path="/admin/languages" element={<ProtectedRoute><Languages /></ProtectedRoute>} />
-        <Route path="/admin/subscription-plans" element={<ProtectedRoute><SubscriptionPlans /></ProtectedRoute>} />
-        <Route path="/admin/subscriptions" element={<ProtectedRoute><Subscriptions /></ProtectedRoute>} />
-        <Route path="/admin/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
+        <Route
+          path="/admin/languages"
+          element={
+            <ProtectedRoute>
+              <Languages />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/subscription-plans"
+          element={
+            <ProtectedRoute>
+              <SubscriptionPlans />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/subscriptions"
+          element={
+            <ProtectedRoute>
+              <Subscriptions />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            <ProtectedRoute>
+              <AuditLogs />
+            </ProtectedRoute>
+          }
+        />
 
         {/* STORES */}
-        <Route path="/stores" element={<ProtectedRoute permission="stores.view"><Stores /></ProtectedRoute>} />
-        <Route path="/stores/create" element={<ProtectedRoute permission="stores.create"><StoreForm /></ProtectedRoute>} />
-        <Route path="/stores/edit/:id" element={<ProtectedRoute permission="stores.edit"><StoreForm /></ProtectedRoute>} />
+        <Route
+          path="/stores"
+          element={
+            <ProtectedRoute permission="stores.view">
+              <Stores />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/stores/create"
+          element={
+            <ProtectedRoute permission="stores.create">
+              <StoreForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/stores/edit/:id"
+          element={
+            <ProtectedRoute permission="stores.edit">
+              <StoreForm />
+            </ProtectedRoute>
+          }
+        />
 
         {/* ROLES */}
-        <Route path="/roles" element={<ProtectedRoute permission="roles.view"><Roles /></ProtectedRoute>} />
-        <Route path="/roles/create" element={<ProtectedRoute permission="roles.create"><RoleForm /></ProtectedRoute>} />
-        <Route path="/roles/edit/:id" element={<ProtectedRoute permission="roles.edit"><RoleForm /></ProtectedRoute>} />
-        <Route path="/roles/permissions" element={<ProtectedRoute permission="roles.edit"><RolePermissionsPage /></ProtectedRoute>} />
+        <Route
+          path="/roles"
+          element={
+            <ProtectedRoute permission="roles.view">
+              <Roles />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/roles/create"
+          element={
+            <ProtectedRoute permission="roles.create">
+              <RoleForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/roles/edit/:id"
+          element={
+            <ProtectedRoute permission="roles.edit">
+              <RoleForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/roles/permissions"
+          element={
+            <ProtectedRoute permission="roles.edit">
+              <RolePermissionsPage />
+            </ProtectedRoute>
+          }
+        />
 
         {/* USERS */}
-        <Route path="/users" element={<ProtectedRoute permission="users.view"><Users /></ProtectedRoute>} />
-        <Route path="/users/create" element={<ProtectedRoute permission="users.create"><UserForm /></ProtectedRoute>} />
-        <Route path="/users/edit/:id" element={<ProtectedRoute permission="users.edit"><UserForm /></ProtectedRoute>} />
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute permission="users.view">
+              <Users />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/users/create"
+          element={
+            <ProtectedRoute permission="users.create">
+              <UserForm />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/users/edit/:id"
+          element={
+            <ProtectedRoute permission="users.edit">
+              <UserForm />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/users/stores" element={<UserStoresPage />} />
       </Routes>
     </BrowserRouter>

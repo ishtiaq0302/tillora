@@ -6,11 +6,18 @@ import Modal from "../pages/component/Modal";
 import DeleteDialog from "../pages/component/DeleteDialog";
 import Button from "../pages/component/Button";
 import toast from "react-hot-toast";
+import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 
 const pageSizeStyle = {
-  background: "var(--inp)", border: "1px solid var(--inpbd)", borderRadius: "var(--r)",
-  padding: "3px 22px 3px 7px", fontSize: 12, color: "var(--tx)", fontFamily: "var(--font)", outline: "none",
+  background: "var(--inp)",
+  border: "1px solid var(--inpbd)",
+  borderRadius: "var(--r)",
+  padding: "3px 22px 3px 7px",
+  fontSize: 12,
+  color: "var(--tx)",
+  fontFamily: "var(--font)",
+  outline: "none",
 };
 
 export default function CrudPage({
@@ -36,7 +43,7 @@ export default function CrudPage({
 }) {
   const { t } = useLanguage();
   const label = singular || (title.endsWith("ies") ? title.slice(0, -3) + "y" : title.endsWith("s") ? title.slice(0, -1) : title);
-
+  const { currentStore } = useAuth();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -68,29 +75,40 @@ export default function CrudPage({
 
   useEffect(() => {
     loadData();
-    if (extraLoader) extraLoader().then(setExtras).catch(() => {});
-    if (storeFilter) service.getAll("stores").then((r) => setStores(r.data?.data || r.data || [])).catch(() => {});
+    if (extraLoader)
+      extraLoader()
+        .then(setExtras)
+        .catch(() => {});
+    if (storeFilter)
+      service
+        .getAll("stores")
+        .then((r) => setStores(normalizeStoreList(r.data?.data || r.data || [])))
+        .catch(() => {});
     if (onReload) onReload(loadData);
   }, [loadData]);
+
+  useEffect(() => {
+    setFilterStore(currentStore?.id ?? null);
+  }, [currentStore?.id]);
 
   useStoreRefresh(loadData);
 
   const filtered = useMemo(() => {
     return data.filter((row) => {
-      const matchSearch = !search.trim() || !searchFields.length || (() => {
-        const s = search.toLowerCase();
-        return searchFields.some((f) => (row[f] ?? "").toString().toLowerCase().includes(s));
-      })();
+      const matchSearch =
+        !search.trim() ||
+        !searchFields.length ||
+        (() => {
+          const s = search.toLowerCase();
+          return searchFields.some((f) => (row[f] ?? "").toString().toLowerCase().includes(s));
+        })();
       const matchStore = !storeFilter || !filterStore || row.store_id === filterStore;
       return matchSearch && matchStore;
     });
   }, [data, search, searchFields, storeFilter, filterStore]);
 
   const totalPages = Math.ceil(filtered.length / pageSize);
-  const paged = useMemo(
-    () => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [filtered, currentPage, pageSize]
-  );
+  const paged = useMemo(() => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filtered, currentPage, pageSize]);
   useEffect(() => setCurrentPage(1), [search, filterStore, pageSize]);
 
   const handleChange = (e) => {
@@ -101,9 +119,24 @@ export default function CrudPage({
     if (errors[name]) setErrors((p) => ({ ...p, [name]: undefined }));
   };
 
-  const openCreate = () => { setForm({ ...emptyForm }); setErrors({}); setEditId(null); setModal("create"); };
-  const openEdit = (row) => { setForm(toForm ? toForm(row) : { ...emptyForm, ...row }); setErrors({}); setEditId(row.id); setModal("edit"); };
-  const closeModal = () => { setModal(null); setEditId(null); };
+  const openCreate = () => {
+    setForm({ ...emptyForm });
+    setErrors({});
+    setEditId(null);
+    setModal("create");
+  };
+  const openEdit = (row) => {
+    setForm(toForm ? toForm(row) : { ...emptyForm, ...row });
+    setErrors({});
+    setEditId(row.id);
+    setModal("edit");
+  };
+  const closeModal = () => {
+    setModal(null);
+    setEditId(null);
+  };
+
+  const FormRenderer = renderForm;
 
   const handleSave = async () => {
     const errs = validate(form);
@@ -144,9 +177,15 @@ export default function CrudPage({
     const delta = 2;
     const left = Math.max(1, currentPage - delta);
     const right = Math.min(totalPages, currentPage + delta);
-    if (left > 1) { pages.push(1); if (left > 2) pages.push("..."); }
+    if (left > 1) {
+      pages.push(1);
+      if (left > 2) pages.push("...");
+    }
     for (let i = left; i <= right; i++) pages.push(i);
-    if (right < totalPages) { if (right < totalPages - 1) pages.push("..."); pages.push(totalPages); }
+    if (right < totalPages) {
+      if (right < totalPages - 1) pages.push("...");
+      pages.push(totalPages);
+    }
     return pages;
   };
 
@@ -157,32 +196,40 @@ export default function CrudPage({
       <div className="card">
         {/* HEADER */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
-          <strong className="ct" style={{ fontSize: 15, flexShrink: 0 }}>{title}</strong>
+          <strong className="ct" style={{ fontSize: 15, flexShrink: 0 }}>
+            {title}
+          </strong>
           <div className="srch w-full sm:w-auto sm:flex-1 sm:max-w-xs">
-            <span className="srch-ic"><Search size={13} /></span>
-            <input
-              type="text"
-              placeholder={`${t("search", "common")} ${title.toLowerCase()}...`}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <span className="srch-ic">
+              <Search size={13} />
+            </span>
+            <input type="text" placeholder={`${t("search", "common")} ${title.toLowerCase()}...`} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
-            {storeFilter && (
+            {/* {storeFilter && (
               <select value={filterStore} onChange={(e) => setFilterStore(e.target.value)} style={pageSizeStyle}>
                 <option value="">{t("all_stores", "common")}</option>
-                {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {stores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
               </select>
-            )}
+            )} */}
             <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--tx3)" }}>
               <span>{t("show", "common")}</span>
               <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={pageSizeStyle}>
-                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
               </select>
             </div>
             {canCreate && (
               <Button variant="primary" size="sm" onClick={openCreate}>
-                <Plus size={13} strokeWidth={2.5} /><span>{t("add", "common")}</span>
+                <Plus size={13} strokeWidth={2.5} />
+                <span>{t("add", "common")}</span>
               </Button>
             )}
           </div>
@@ -196,37 +243,61 @@ export default function CrudPage({
             <thead>
               <tr>
                 {tableColumns.map((col) => (
-                  <th key={col.label} style={{ width: col.width }}>{col.label}</th>
+                  <th key={col.label} style={{ width: col.width }}>
+                    {col.label}
+                  </th>
                 ))}
                 <th style={{ width: 80 }}></th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={colCount} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>{t("loading", "common")}</td></tr>
-              ) : paged.length === 0 ? (
-                <tr><td colSpan={colCount} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>{t("no_data", "common")}</td></tr>
-              ) : paged.map((row) => (
-                <tr key={row.id} style={{ cursor: "pointer" }} onClick={() => openEdit(row)}>
-                  {tableColumns.map((col) => (
-                    <td key={col.label} style={col.tdStyle}>{col.render(row, extras, data)}</td>
-                  ))}
-                  <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
-                      <button className="hbtn" onClick={(e) => { e.stopPropagation(); openEdit(row); }} title={t("edit", "common")}>
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        className="hbtn"
-                        onClick={(e) => { e.stopPropagation(); setDeleteDialog({ open: true, id: row.id, label: deleteLabel(row) }); }}
-                        title={t("delete", "common")}
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+                <tr>
+                  <td colSpan={colCount} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>
+                    {t("loading", "common")}
                   </td>
                 </tr>
-              ))}
+              ) : paged.length === 0 ? (
+                <tr>
+                  <td colSpan={colCount} style={{ textAlign: "center", color: "var(--tx3)", padding: "24px 0" }}>
+                    {t("no_data", "common")}
+                  </td>
+                </tr>
+              ) : (
+                paged.map((row) => (
+                  <tr key={row.id} style={{ cursor: "pointer" }} onClick={() => openEdit(row)}>
+                    {tableColumns.map((col) => (
+                      <td key={col.label} style={col.tdStyle}>
+                        {col.render(row, extras, data)}
+                      </td>
+                    ))}
+                    <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "right" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                        <button
+                          className="hbtn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(row);
+                          }}
+                          title={t("edit", "common")}
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          className="hbtn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteDialog({ open: true, id: row.id, label: deleteLabel(row) });
+                          }}
+                          title={t("delete", "common")}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -248,15 +319,19 @@ export default function CrudPage({
                 </button>
                 {getPageNumbers().map((page, i) =>
                   page === "..." ? (
-                    <span key={`dots-${i}`} style={{ padding: "0 4px", color: "var(--tx3)" }}>…</span>
+                    <span key={`dots-${i}`} style={{ padding: "0 4px", color: "var(--tx3)" }}>
+                      …
+                    </span>
                   ) : (
-                    <button key={page} onClick={() => setCurrentPage(page)} className="hbtn"
-                      style={currentPage === page
-                        ? { background: "var(--abg)", borderColor: "var(--accent)", color: "var(--accent)", width: 28, height: 28, fontSize: 12 }
-                        : { width: 28, height: 28, fontSize: 12, color: "var(--tx2)" }}>
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className="hbtn"
+                      style={currentPage === page ? { background: "var(--abg)", borderColor: "var(--accent)", color: "var(--accent)", width: 28, height: 28, fontSize: 12 } : { width: 28, height: 28, fontSize: 12, color: "var(--tx2)" }}
+                    >
                       {page}
                     </button>
-                  )
+                  ),
                 )}
                 <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="hbtn" style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>
                   <ChevronRight size={13} />
@@ -277,23 +352,20 @@ export default function CrudPage({
           width={modalWidth}
           footer={
             <>
-              <Button variant="ghost" size="sm" onClick={closeModal}>{t("cancel", "common")}</Button>
+              <Button variant="ghost" size="sm" onClick={closeModal}>
+                {t("cancel", "common")}
+              </Button>
               <Button variant="primary" size="sm" disabled={saving} onClick={handleSave}>
                 {saving ? t("saving", "common") : modal === "edit" ? t("update", "common") : t("create", "common")}
               </Button>
             </>
           }
         >
-          {renderForm && renderForm({ form, onChange: handleChange, errors, data, extras })}
+          {FormRenderer && <FormRenderer form={form} onChange={handleChange} errors={errors} data={data} extras={extras} />}
         </Modal>
       )}
 
-      <DeleteDialog
-        isOpen={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, id: null, label: "" })}
-        onConfirm={handleDelete}
-        label={deleteDialog.label}
-      />
+      <DeleteDialog isOpen={deleteDialog.open} onClose={() => setDeleteDialog({ open: false, id: null, label: "" })} onConfirm={handleDelete} label={deleteDialog.label} />
     </MainLayout>
   );
 }

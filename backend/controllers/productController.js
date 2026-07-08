@@ -106,18 +106,16 @@ export const getProducts = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const conditions = [{ tenantId }, { isActive: true }];
+    const accessibleStoreIds = req.allowedStoreIds || [];
     if (search) {
-      conditions.push({ OR: [
-        { name: { contains: search, mode: "insensitive" } },
-        { sku: { contains: search, mode: "insensitive" } },
-        { barcode: { contains: search, mode: "insensitive" } },
-      ]});
+      conditions.push({ OR: [{ name: { contains: search, mode: "insensitive" } }, { sku: { contains: search, mode: "insensitive" } }, { barcode: { contains: search, mode: "insensitive" } }] });
     }
-    if (storeId) {
-      conditions.push({ OR: [
-        { isGlobal: true },
-        { storeProducts: { some: { storeId } } },
-      ]});
+    if (req.user?.isSuperAdmin) {
+      // super admins can see all tenant products
+    } else if (accessibleStoreIds.length > 0) {
+      conditions.push({ OR: [{ isGlobal: true }, { storeProducts: { some: { storeId: { in: accessibleStoreIds } } } }] });
+    } else {
+      conditions.push({ OR: [{ isGlobal: true }, { storeProducts: { some: { storeId: { in: [] } } } }] });
     }
     const where = { AND: conditions };
 
@@ -144,8 +142,13 @@ export const getProducts = async (req, res) => {
 export const getProduct = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const product = await prisma.product.findFirst({
-      where: { id: req.params.id, tenantId },
+      where: {
+        id: req.params.id,
+        tenantId,
+        ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { OR: [{ isGlobal: true }, { storeProducts: { some: { storeId: { in: accessibleStoreIds } } } }] } : { OR: [{ isGlobal: true }, { storeProducts: { some: { storeId: { in: [] } } } }] }),
+      },
       include: { category: true, brand: true, unit: true, tax: true, storeProducts: true },
     });
 
@@ -173,9 +176,9 @@ export const updateProduct = async (req, res) => {
       where: { id: req.params.id },
       data: {
         name: d.name?.trim() ?? existing.name,
-        sku: d.sku !== undefined ? (d.sku || null) : existing.sku,
-        barcode: d.barcode !== undefined ? (d.barcode || null) : existing.barcode,
-        description: d.description !== undefined ? (d.description || null) : existing.description,
+        sku: d.sku !== undefined ? d.sku || null : existing.sku,
+        barcode: d.barcode !== undefined ? d.barcode || null : existing.barcode,
+        description: d.description !== undefined ? d.description || null : existing.description,
         image: (() => {
           if (req.file) {
             if (existing.image) {
@@ -191,11 +194,11 @@ export const updateProduct = async (req, res) => {
           }
           return existing.image;
         })(),
-        productType: d.product_type ? (TYPE_MAP[d.product_type] || "SIMPLE") : existing.productType,
-        categoryId: d.category_id !== undefined ? (d.category_id || null) : existing.categoryId,
-        brandId: d.brand_id !== undefined ? (d.brand_id || null) : existing.brandId,
-        unitId: d.unit_id !== undefined ? (d.unit_id || null) : existing.unitId,
-        taxId: d.tax_id !== undefined ? (d.tax_id || null) : existing.taxId,
+        productType: d.product_type ? TYPE_MAP[d.product_type] || "SIMPLE" : existing.productType,
+        categoryId: d.category_id !== undefined ? d.category_id || null : existing.categoryId,
+        brandId: d.brand_id !== undefined ? d.brand_id || null : existing.brandId,
+        unitId: d.unit_id !== undefined ? d.unit_id || null : existing.unitId,
+        taxId: d.tax_id !== undefined ? d.tax_id || null : existing.taxId,
         costPrice: d.cost_price !== undefined ? Number(d.cost_price) : existing.costPrice,
         sellingPrice: d.selling_price !== undefined ? Number(d.selling_price) : existing.sellingPrice,
         stockQuantity: d.stock_quantity !== undefined ? Number(d.stock_quantity) : existing.stockQuantity,

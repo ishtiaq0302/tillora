@@ -9,6 +9,16 @@ import { useAuth } from "../../context/AuthContext";
 
 const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
 
+const normalizeStoreList = (value) => {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") {
+    if (Array.isArray(value.stores)) return value.stores;
+    if (Array.isArray(value.data)) return value.data;
+    if (Array.isArray(value.items)) return value.items;
+  }
+  return [];
+};
+
 function useWindowWidth() {
   const [width, setWidth] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1280));
   useEffect(() => {
@@ -114,7 +124,6 @@ function ProductSelectionModal({ product, variants, storeVariants = [], storeAtt
   const anyAttrSelected = attrEntries.some(([id]) => (selectedOptions[id] || []).length > 0);
 
   const subtitle = hasVariants ? "Select variants to add to cart" : hasAttrs ? "Select options (optional)" : "Add to cart";
-
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-[35rem] max-h-[75vh] flex flex-col shadow-2xl border border-stone-200" onClick={(e) => e.stopPropagation()}>
@@ -212,7 +221,7 @@ function ProductSelectionModal({ product, variants, storeVariants = [], storeAtt
 }
 
 export default function POS() {
-  const { currentStore } = useAuth();
+  const { user, currentStore } = useAuth();
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 640;
 
@@ -288,17 +297,27 @@ export default function POS() {
       .getAll("customers")
       .then((r) => setCustomers(r.data?.data || r.data || []))
       .catch(() => {});
-    if (!currentStore?.id)
+  }, [loadProducts]);
+
+  // Reload the stores dropdown whenever the current store selection changes
+  // (e.g. switching to "All Stores" from the header) — not just once on mount.
+  // Previously this lived inside the mount-only effect above, keyed on
+  // `[loadProducts]`, so it never re-ran when `currentStore` changed later,
+  // leaving `stores` empty until a full page refresh remounted the component.
+  useEffect(() => {
+    if (!currentStore?.id) {
       masterService
         .getAll("stores")
-        .then((r) => setStores(r.data?.data || r.data || []))
+        .then((r) => setStores(normalizeStoreList(r.data?.data || r.data || [])))
         .catch(() => {});
-  }, [loadProducts]);
+    }
+  }, [currentStore?.id]);
 
   useStoreRefresh(loadProducts);
 
   const currencySymbol = useMemo(() => {
-    const cur = currentStore?.currency || stores.find((s) => s.id === selectedStoreId)?.currency || "PKR";
+    const selectedStore = Array.isArray(stores) ? stores.find((s) => s.id === selectedStoreId) : null;
+    const cur = currentStore?.currency || selectedStore?.currency || "PKR";
     return { PKR: "Rs", USD: "$", SAR: "SR", EUR: "€", GBP: "£", AED: "AED" }[cur] ?? cur;
   }, [currentStore, stores, selectedStoreId]);
 
@@ -522,9 +541,9 @@ export default function POS() {
 
         {/* Customer / Store */}
         <div className="px-2 py-0.5 border-b border-stone-100 flex flex-col gap-1.5">
-          {currentStore?.id == null && stores.length > 0 && (
+          {currentStore?.id == null && user?.stores?.length > 1 && (
             <select value={selectedStoreId} onChange={(e) => setSelectedStoreId(e.target.value)} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1 text-stone-700 outline-none focus:border-amber-400">
-              <option value="">Store…</option>
+              <option value="">Select Stores</option>
               {stores.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -532,6 +551,7 @@ export default function POS() {
               ))}
             </select>
           )}
+
           <div className="flex items-center gap-2">
             <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className="flex-1 min-w-0 text-xs bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1 text-stone-700 outline-none focus:border-amber-400">
               <option value="">Walk-in customer</option>
@@ -568,9 +588,6 @@ export default function POS() {
                 {/* Info + qty */}
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-semibold text-stone-800 truncate leading-tight">{item.name}</p>
-                  {/* <p className="text-[10.5px] text-stone-400 mt-0.5">
-                    {currencySymbol} {item.price.toLocaleString()} each
-                  </p> */}
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <button className="w-5 h-5 rounded-md bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-200 transition-colors" onClick={() => updateQty(item.key, -1)}>
                       <Minus size={8} />

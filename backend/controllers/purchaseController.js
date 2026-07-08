@@ -80,21 +80,7 @@ export const createPurchase = async (req, res) => {
       return res.status(400).json({ message: "No store selected. Please select a store first." });
     }
 
-    const {
-      invoice_no,
-      supplier_id,
-      payment_status,
-      purchase_status,
-      subtotal,
-      discount,
-      tax,
-      shipping,
-      grand_total,
-      notes,
-      items,
-      ingredient_items,
-      variant_items,
-    } = req.body;
+    const { invoice_no, supplier_id, payment_status, purchase_status, subtotal, discount, tax, shipping, grand_total, notes, items, ingredient_items, variant_items } = req.body;
 
     const hasItems = items && items.length > 0;
     const hasIngredientItems = ingredient_items && ingredient_items.length > 0;
@@ -164,7 +150,7 @@ export const createPurchase = async (req, res) => {
       });
 
       // Product items: increment product stock (variant if specified, else base product)
-      for (const it of (items || [])) {
+      for (const it of items || []) {
         if (it.product_id) {
           if (it.product_variant_id) {
             await tx.productVariant.update({
@@ -193,7 +179,7 @@ export const createPurchase = async (req, res) => {
       }
 
       // Ingredient items: increment ingredient stock
-      for (const it of (ingredient_items || [])) {
+      for (const it of ingredient_items || []) {
         if (it.ingredient_id) {
           await tx.ingredient.update({
             where: { id: it.ingredient_id },
@@ -203,7 +189,7 @@ export const createPurchase = async (req, res) => {
       }
 
       // Variant items: increment variant stock (multi-select add-ons)
-      for (const it of (variant_items || [])) {
+      for (const it of variant_items || []) {
         if (it.variant_id) {
           await tx.variant.update({
             where: { id: it.variant_id },
@@ -226,7 +212,7 @@ export const createPurchase = async (req, res) => {
 export const getPurchases = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
-    const storeId = req.storeId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 20;
     const search = req.query.search || "";
@@ -234,13 +220,10 @@ export const getPurchases = async (req, res) => {
 
     const where = {
       tenantId,
-      ...(storeId ? { storeId } : {}),
+      ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
       ...(search
         ? {
-            OR: [
-              { invoiceNo: { contains: search, mode: "insensitive" } },
-              { supplier: { name: { contains: search, mode: "insensitive" } } },
-            ],
+            OR: [{ invoiceNo: { contains: search, mode: "insensitive" } }, { supplier: { name: { contains: search, mode: "insensitive" } } }],
           }
         : {}),
     };
@@ -272,8 +255,13 @@ export const getPurchases = async (req, res) => {
 export const getPurchase = async (req, res) => {
   try {
     const tenantId = req.user.tenantId;
+    const accessibleStoreIds = req.allowedStoreIds || [];
     const purchase = await prisma.purchase.findFirst({
-      where: { id: req.params.id, tenantId },
+      where: {
+        id: req.params.id,
+        tenantId,
+        ...(req.user?.isSuperAdmin ? {} : accessibleStoreIds.length > 0 ? { storeId: { in: accessibleStoreIds } } : { storeId: { in: [] } }),
+      },
       include: {
         store: { select: { id: true, name: true } },
         supplier: true,

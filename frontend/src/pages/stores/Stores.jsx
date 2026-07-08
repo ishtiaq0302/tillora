@@ -13,8 +13,14 @@ import { useLanguage } from "../../context/LanguageContext";
 const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
 
 const pageSizeStyle = {
-  background: "var(--inp)", border: "1px solid var(--inpbd)", borderRadius: "var(--r)",
-  padding: "3px 22px 3px 7px", fontSize: 12, color: "var(--tx)", fontFamily: "var(--font)", outline: "none",
+  background: "var(--inp)",
+  border: "1px solid var(--inpbd)",
+  borderRadius: "var(--r)",
+  padding: "3px 22px 3px 7px",
+  fontSize: 12,
+  color: "var(--tx)",
+  fontFamily: "var(--font)",
+  outline: "none",
 };
 
 function StoreDetailModal({ store, onClose }) {
@@ -28,12 +34,18 @@ function StoreDetailModal({ store, onClose }) {
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const Y = String(date.getFullYear());
     switch (store.dateFormat) {
-      case "d-m-Y": return `${d}-${m}-${Y}`;
-      case "m-d-Y": return `${m}-${d}-${Y}`;
-      case "Y-m-d": return `${Y}-${m}-${d}`;
-      case "d/m/Y": return `${d}/${m}/${Y}`;
-      case "m/d/Y": return `${m}/${d}/${Y}`;
-      default: return `${d}-${m}-${Y}`;
+      case "d-m-Y":
+        return `${d}-${m}-${Y}`;
+      case "m-d-Y":
+        return `${m}-${d}-${Y}`;
+      case "Y-m-d":
+        return `${Y}-${m}-${d}`;
+      case "d/m/Y":
+        return `${d}/${m}/${Y}`;
+      case "m/d/Y":
+        return `${m}/${d}/${Y}`;
+      default:
+        return `${d}-${m}-${Y}`;
     }
   };
 
@@ -57,21 +69,26 @@ function StoreDetailModal({ store, onClose }) {
   ];
 
   return (
-    <Modal isOpen={!!store} onClose={onClose} width={860} columns={{ sm: 1, md: 2, lg: 3 }}
+    <Modal
+      isOpen={!!store}
+      onClose={onClose}
+      width={860}
+      columns={{ sm: 1, md: 2, lg: 3 }}
       title={
         <div className="flex items-center gap-2">
           <span>{store.name}</span>
-          <Badge variant={store.isActive ? "success" : "danger"}>
-            {store.isActive ? t("active", "stores") : t("inactive", "stores")}
-          </Badge>
+          <Badge variant={store.isActive ? "success" : "danger"}>{store.isActive ? t("active", "stores") : t("inactive", "stores")}</Badge>
         </div>
       }
-      footer={<Button variant="ghost" onClick={onClose}>{t("close", "stores")}</Button>}
+      footer={
+        <Button variant="ghost" onClick={onClose}>
+          {t("close", "stores")}
+        </Button>
+      }
     >
       {store.logo && (
         <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 12, paddingBottom: 4 }}>
-          <img src={`${SERVER_URL}${store.logo}`} alt={`${store.name} logo`}
-            style={{ width: 64, height: 64, borderRadius: "var(--r2)", objectFit: "cover", border: "1px solid var(--bd)", background: "var(--bg3)" }} />
+          <img src={`${SERVER_URL}${store.logo}`} alt={`${store.name} logo`} style={{ width: 64, height: 64, borderRadius: "var(--r2)", objectFit: "cover", border: "1px solid var(--bd)", background: "var(--bg3)" }} />
           <div>
             <p style={{ fontSize: 10.5, color: "var(--tx3)", marginBottom: 2 }}>{t("store_logo_label", "stores")}</p>
           </div>
@@ -114,14 +131,15 @@ export default function Stores() {
     }
   };
 
-  useEffect(() => { fetchStores(); }, []);
+  useEffect(() => {
+    fetchStores();
+  }, []);
 
   const filteredStores = useMemo(() => {
     if (!search.trim()) return stores;
     const terms = search.toLowerCase().split(" ").filter(Boolean);
     return stores.filter((store) => {
-      const haystack = [store.name, store.code, store.storeType, store.phone, store.email, store.currency, store.address, store.city, store.state, store.country, store.isActive ? "active" : "inactive"]
-        .filter(Boolean).join(" ").toLowerCase();
+      const haystack = [store.name, store.code, store.storeType, store.phone, store.email, store.currency, store.address, store.city, store.state, store.country, store.isActive ? "active" : "inactive"].filter(Boolean).join(" ").toLowerCase();
       return terms.every((term) => haystack.includes(term));
     });
   }, [stores, search]);
@@ -133,7 +151,9 @@ export default function Stores() {
     return filteredStores.slice(start, start + pageSize);
   }, [filteredStores, currentPage, pageSize]);
 
-  useEffect(() => { setCurrentPage(1); }, [search, pageSize]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, pageSize]);
 
   const handleDelete = async () => {
     try {
@@ -150,20 +170,24 @@ export default function Stores() {
     }
   };
 
-  const toggleSelect = (id) =>
-    setSelectedStores((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
+  const toggleSelect = (id) => setSelectedStores((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
 
-  const toggleSelectAll = () =>
-    setSelectedStores(selectedStores.length === paginatedStores.length ? [] : paginatedStores.map((s) => s.id));
+  const toggleSelectAll = () => setSelectedStores(selectedStores.length === paginatedStores.length ? [] : paginatedStores.map((s) => s.id));
 
   const getPageNumbers = () => {
     const pages = [];
     const delta = 2;
     const left = Math.max(1, currentPage - delta);
     const right = Math.min(totalPages, currentPage + delta);
-    if (left > 1) { pages.push(1); if (left > 2) pages.push("..."); }
+    if (left > 1) {
+      pages.push(1);
+      if (left > 2) pages.push("...");
+    }
     for (let i = left; i <= right; i++) pages.push(i);
-    if (right < totalPages) { if (right < totalPages - 1) pages.push("..."); pages.push(totalPages); }
+    if (right < totalPages) {
+      if (right < totalPages - 1) pages.push("...");
+      pages.push(totalPages);
+    }
     return pages;
   };
 
@@ -174,11 +198,16 @@ export default function Stores() {
       <div className="card">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <strong className="ct" style={{ fontSize: 15 }}>{t("title", "stores")}</strong>
+            <strong className="ct" style={{ fontSize: 15 }}>
+              {t("title", "stores")}
+            </strong>
             {maxStores != null && (
               <span
                 style={{
-                  fontSize: 11, fontWeight: 600, padding: "2px 9px", borderRadius: 20,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  padding: "2px 9px",
+                  borderRadius: 20,
                   background: stores.length >= maxStores ? "var(--rbg)" : stores.length >= maxStores * 0.8 ? "var(--ambg)" : "var(--gbg)",
                   color: stores.length >= maxStores ? "var(--red)" : stores.length >= maxStores * 0.8 ? "var(--amber)" : "var(--green)",
                 }}
@@ -189,7 +218,9 @@ export default function Stores() {
           </div>
 
           <div className="srch w-full sm:w-auto sm:flex-1 sm:max-w-xs">
-            <span className="srch-ic"><Search size={13} /></span>
+            <span className="srch-ic">
+              <Search size={13} />
+            </span>
             <input type="text" placeholder={t("search_placeholder", "stores")} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
@@ -197,7 +228,11 @@ export default function Stores() {
             <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: "var(--tx3)" }}>
               <span>{t("show", "stores")}</span>
               <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} style={pageSizeStyle}>
-                {[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}
+                {[10, 25, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -215,7 +250,7 @@ export default function Stores() {
             ) : (
               <Link to="/stores/create" className="btn btn-p" style={{ fontSize: 12 }}>
                 <Plus size={13} strokeWidth={2.5} />
-                <span>{t("add", "common")}</span>
+                <span>Add Store</span>
               </Link>
             )}
           </div>
@@ -225,8 +260,14 @@ export default function Stores() {
         {maxStores != null && stores.length >= maxStores && (
           <div
             style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-              background: "var(--rbg)", borderRadius: "var(--r)", marginBottom: 12, fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              padding: "10px 14px",
+              background: "var(--rbg)",
+              borderRadius: "var(--r)",
+              marginBottom: 12,
+              fontSize: 12,
             }}
           >
             <AlertTriangle size={14} style={{ color: "var(--red)", flexShrink: 0 }} />
@@ -246,8 +287,7 @@ export default function Stores() {
             <thead>
               <tr>
                 <th style={{ width: 32 }}>
-                  <input type="checkbox" checked={paginatedStores.length > 0 && selectedStores.length === paginatedStores.length}
-                    onChange={toggleSelectAll} style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
+                  <input type="checkbox" checked={paginatedStores.length > 0 && selectedStores.length === paginatedStores.length} onChange={toggleSelectAll} style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
                 </th>
                 <th>{t("col_name", "stores")}</th>
                 <th className="hidden sm:table-cell">{t("col_code", "stores")}</th>
@@ -260,15 +300,22 @@ export default function Stores() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>{t("loading", "stores")}</td></tr>
+                <tr>
+                  <td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>
+                    {t("loading", "stores")}
+                  </td>
+                </tr>
               ) : paginatedStores.length === 0 ? (
-                <tr><td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>{t("no_stores_found", "stores")}</td></tr>
+                <tr>
+                  <td colSpan="8" style={{ textAlign: "center", color: "var(--tx3)" }}>
+                    {t("no_stores_found", "stores")}
+                  </td>
+                </tr>
               ) : (
                 paginatedStores.map((store) => (
                   <tr key={store.id} onClick={() => navigate(`/stores/edit/${store.id}`)} style={{ cursor: "pointer" }}>
                     <td onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={selectedStores.includes(store.id)} onChange={() => toggleSelect(store.id)}
-                        style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
+                      <input type="checkbox" checked={selectedStores.includes(store.id)} onChange={() => toggleSelect(store.id)} style={{ width: 12, height: 12, accentColor: "var(--accent)", cursor: "pointer" }} />
                     </td>
                     <td>{store.name}</td>
                     <td className="hidden sm:table-cell">{store.code || "-"}</td>
@@ -276,12 +323,12 @@ export default function Stores() {
                     <td className="hidden md:table-cell">{store.phone || "-"}</td>
                     <td className="hidden lg:table-cell">{store.currency}</td>
                     <td>
-                      <span className={`sta ${store.isActive ? "ok" : "er"}`}>
-                        {store.isActive ? t("active", "stores") : t("inactive", "stores")}
-                      </span>
+                      <span className={`sta ${store.isActive ? "ok" : "er"}`}>{store.isActive ? t("active", "stores") : t("inactive", "stores")}</span>
                     </td>
                     <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => setDetailStore(store)} className="hbtn" title="View details"><Eye size={13} /></button>
+                      <button onClick={() => setDetailStore(store)} className="hbtn" title="View details">
+                        <Eye size={13} />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -307,15 +354,19 @@ export default function Stores() {
                 </button>
                 {getPageNumbers().map((page, i) =>
                   page === "..." ? (
-                    <span key={`dots-${i}`} style={{ padding: "0 4px", color: "var(--tx3)" }}>…</span>
+                    <span key={`dots-${i}`} style={{ padding: "0 4px", color: "var(--tx3)" }}>
+                      …
+                    </span>
                   ) : (
-                    <button key={page} onClick={() => setCurrentPage(page)} className="hbtn"
-                      style={currentPage === page
-                        ? { background: "var(--abg)", borderColor: "var(--accent)", color: "var(--accent)", width: 28, height: 28, fontSize: 12 }
-                        : { width: 28, height: 28, fontSize: 12, color: "var(--tx2)" }}>
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className="hbtn"
+                      style={currentPage === page ? { background: "var(--abg)", borderColor: "var(--accent)", color: "var(--accent)", width: 28, height: 28, fontSize: 12 } : { width: 28, height: 28, fontSize: 12, color: "var(--tx2)" }}
+                    >
                       {page}
                     </button>
-                  )
+                  ),
                 )}
                 <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="hbtn" style={{ opacity: currentPage === totalPages ? 0.4 : 1 }}>
                   <ChevronRight size={13} />
@@ -326,12 +377,7 @@ export default function Stores() {
         )}
       </div>
 
-      <DeleteDialog
-        isOpen={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, id: null, label: "" })}
-        onConfirm={handleDelete}
-        label={deleteDialog.label}
-      />
+      <DeleteDialog isOpen={deleteDialog.open} onClose={() => setDeleteDialog({ open: false, id: null, label: "" })} onConfirm={handleDelete} label={deleteDialog.label} />
     </MainLayout>
   );
 }
