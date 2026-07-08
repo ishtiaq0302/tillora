@@ -21,12 +21,12 @@ GitHub Repository (ishtiaq0302/tillora)
 
 ## CURRENT LIVE URLS
 
-| Service  | URL                                          |
-| -------- | -------------------------------------------- |
-| Frontend | https://tillora.store                        |
-| Backend  | https://tillora-production.up.railway.app    |
-| Database | Neon → project: neondb (us-west-2)           |
-| GitHub   | https://github.com/ishtiaq0302/tillora       |
+| Service  | URL                                       |
+| -------- | ----------------------------------------- |
+| Frontend | https://tillora.store                     |
+| Backend  | https://tillora-production.up.railway.app |
+| Database | Neon → project: neondb (us-west-2)        |
+| GitHub   | https://github.com/ishtiaq0302/tillora    |
 
 ---
 
@@ -221,6 +221,10 @@ cd "e:\wamp\www\pos"
 git add .
 git commit -m "Backend: describe your change"
 git push origin master
+
+# If above push not working
+git push origin master --force
+
 ```
 
 Railway picks up the push and redeploys within ~1 minute. Check Railway dashboard for deploy status.
@@ -230,12 +234,14 @@ Railway picks up the push and redeploys within ~1 minute. Check Railway dashboar
 ### If you changed FRONTEND FILES (React components, pages, styles)
 
 **Step 1 — Rebuild:**
+
 ```powershell
 cd "e:\wamp\www\pos\frontend"
 npm run build
 ```
 
 **Step 2 — Push to GitHub:**
+
 ```powershell
 cd "e:\wamp\www\pos"
 git add .
@@ -244,6 +250,7 @@ git push origin master
 ```
 
 **Step 3 — Upload new dist to StackCP:**
+
 1. Go to StackCP → File Manager → `tillora/`
 2. Delete old `assets/` folder and `index.html`
 3. Upload new `frontend/dist/assets/` and `frontend/dist/index.html`
@@ -260,31 +267,31 @@ git push origin master
 
 ## Quick Reference
 
-| What                  | Where / Command                                              |
-| --------------------- | ------------------------------------------------------------ |
-| Frontend files        | `tillora/` folder on StackCP                                 |
-| Backend hosting       | Railway.app (auto-deploys from GitHub)                       |
-| Database              | Neon.tech (cloud PostgreSQL)                                 |
-| Local PostgreSQL bin  | `E:\postgresql\bin`                                          |
-| Local database name   | `pos` (user: postgres, password: postgres)                   |
-| Build frontend        | `cd frontend && npm run build`                               |
-| Test DB connection    | `cd backend && npx prisma db pull`                           |
-| Run migrations        | `cd backend && npx prisma migrate deploy`                    |
-| Push to GitHub        | `git add . && git commit -m "msg" && git push origin master` |
-| Live site             | https://tillora.store                                        |
-| Backend API           | https://tillora-production.up.railway.app/api                |
+| What                 | Where / Command                                              |
+| -------------------- | ------------------------------------------------------------ |
+| Frontend files       | `tillora/` folder on StackCP                                 |
+| Backend hosting      | Railway.app (auto-deploys from GitHub)                       |
+| Database             | Neon.tech (cloud PostgreSQL)                                 |
+| Local PostgreSQL bin | `E:\postgresql\bin`                                          |
+| Local database name  | `pos` (user: postgres, password: postgres)                   |
+| Build frontend       | `cd frontend && npm run build`                               |
+| Test DB connection   | `cd backend && npx prisma db pull`                           |
+| Run migrations       | `cd backend && npx prisma migrate deploy`                    |
+| Push to GitHub       | `git add . && git commit -m "msg" && git push origin master` |
+| Live site            | https://tillora.store                                        |
+| Backend API          | https://tillora-production.up.railway.app/api                |
 
 ---
 
 ## Troubleshooting
 
-| Problem                        | Fix                                                                          |
-| ------------------------------ | ---------------------------------------------------------------------------- |
-| Site shows blank page          | Check `.htaccess` is in `tillora/` folder on StackCP                         |
-| Login fails / API 404          | Check Railway backend is running — visit Railway dashboard                   |
-| Still calling localhost:5000   | Rebuild frontend after updating `frontend/.env`, upload new dist to StackCP  |
-| Database connection fails      | Verify `DATABASE_URL` in Railway environment variables matches Neon string   |
-| CORS error in browser          | Add your domain to allowed origins in `backend/server.js`                    |
-| Prisma schema mismatch         | Run `cd backend && npx prisma migrate deploy`                                |
-| Old files still loading        | Hard refresh: `Ctrl + Shift + R` or clear browser cache                      |
-| pg_restore errors on import    | Use `-Fc` format with `pg_dump`, never plain SQL export from pgAdmin         |
+| Problem                      | Fix                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| Site shows blank page        | Check `.htaccess` is in `tillora/` folder on StackCP                        |
+| Login fails / API 404        | Check Railway backend is running — visit Railway dashboard                  |
+| Still calling localhost:5000 | Rebuild frontend after updating `frontend/.env`, upload new dist to StackCP |
+| Database connection fails    | Verify `DATABASE_URL` in Railway environment variables matches Neon string  |
+| CORS error in browser        | Add your domain to allowed origins in `backend/server.js`                   |
+| Prisma schema mismatch       | Run `cd backend && npx prisma migrate deploy`                               |
+| Old files still loading      | Hard refresh: `Ctrl + Shift + R` or clear browser cache                     |
+| pg_restore errors on import  | Use `-Fc` format with `pg_dump`, never plain SQL export from pgAdmin        |
