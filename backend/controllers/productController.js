@@ -10,13 +10,25 @@ const parseBool = (val) => {
   return val === "true" || val === true;
 };
 
+const normalizeProductImagePath = (image) => {
+  if (!image) return null;
+  if (/^https?:\/\//i.test(image)) return image;
+
+  const trimmed = String(image).trim().replace(/^\/+/, "");
+  if (!trimmed) return null;
+  if (trimmed.startsWith("uploads/products/")) return `/${trimmed}`;
+
+  const filename = trimmed.split("/").filter(Boolean).pop();
+  return filename ? `/uploads/products/${filename}` : null;
+};
+
 const formatProduct = (p) => ({
   id: p.id,
   name: p.name,
   sku: p.sku || null,
   barcode: p.barcode || null,
   description: p.description || null,
-  image: p.image || null,
+  image: normalizeProductImagePath(p.image),
   product_type: TYPE_REVERSE[p.productType] || "simple",
   category_id: p.categoryId || null,
   brand_id: p.brandId || null,

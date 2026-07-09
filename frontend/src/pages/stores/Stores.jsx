@@ -9,8 +9,7 @@ import Modal from "../component/Modal";
 import Button from "../component/Button";
 import Badge from "../component/Badge";
 import { useLanguage } from "../../context/LanguageContext";
-
-const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
+import { toMediaUrl } from "../../utils/mediaUrl";
 
 const pageSizeStyle = {
   background: "var(--inp)",
@@ -88,7 +87,7 @@ function StoreDetailModal({ store, onClose }) {
     >
       {store.logo && (
         <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 12, paddingBottom: 4 }}>
-          <img src={`${SERVER_URL}${store.logo}`} alt={`${store.name} logo`} style={{ width: 64, height: 64, borderRadius: "var(--r2)", objectFit: "cover", border: "1px solid var(--bd)", background: "var(--bg3)" }} />
+          <img src={toMediaUrl(store.logo)} alt={`${store.name} logo`} style={{ width: 64, height: 64, borderRadius: "var(--r2)", objectFit: "cover", border: "1px solid var(--bd)", background: "var(--bg3)" }} />
           <div>
             <p style={{ fontSize: 10.5, color: "var(--tx3)", marginBottom: 2 }}>{t("store_logo_label", "stores")}</p>
           </div>

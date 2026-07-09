@@ -6,8 +6,7 @@ import productService from "../../services/productService";
 import masterService from "../../services/masterService";
 import useStoreRefresh from "../../hooks/useStoreRefresh";
 import { useAuth } from "../../context/AuthContext";
-
-const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
+import { toMediaUrl } from "../../utils/mediaUrl";
 
 const normalizeStoreList = (value) => {
   if (Array.isArray(value)) return value;
@@ -474,7 +473,7 @@ export default function POS() {
     const hasVariants = (variantsByProduct[p.id] || []).length > 0;
     const variantCount = variantsByProduct[p.id]?.length || 0;
     const attrCount = Object.keys(storeAttributes).length;
-    const imgSrc = p.image ? `${SERVER_URL}${p.image}` : null;
+    const imgSrc = toMediaUrl(p.image);
     const minPrice = Number(p.selling_price);
     const totalQtyInCart = cart.filter((i) => i.product_id === p.id).reduce((s, i) => s + i.quantity, 0);
 
@@ -579,7 +578,7 @@ export default function POS() {
           </div>
         ) : (
           cart.map((item) => {
-            const imgSrc = item.image ? `${SERVER_URL}${item.image}` : null;
+            const imgSrc = toMediaUrl(item.image);
             return (
               <div key={item.key} className="flex items-center gap-3 px-4 py-0 border-b border-stone-100 last:border-b-0 hover:bg-stone-50/60 transition-colors">
                 {/* Thumbnail */}

@@ -8,8 +8,7 @@ import productService from "../../services/productService";
 import masterService from "../../services/masterService";
 import { useAuth } from "../../context/AuthContext";
 import { useLanguage } from "../../context/LanguageContext";
-
-const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
+import { toMediaUrl } from "../../utils/mediaUrl";
 
 const EMPTY = {
   name: "",
@@ -77,14 +76,7 @@ export default function ProductForm() {
   const fileRef = useRef();
 
   useEffect(() => {
-    Promise.all([
-      masterService.getAll("categories"),
-      masterService.getAll("brands"),
-      masterService.getAll("units"),
-      masterService.getAll("taxes"),
-      masterService.getAll("attribute-values"),
-      masterService.getAll("variants"),
-    ])
+    Promise.all([masterService.getAll("categories"), masterService.getAll("brands"), masterService.getAll("units"), masterService.getAll("taxes"), masterService.getAll("attribute-values"), masterService.getAll("variants")])
       .then(([cat, brd, unt, tax, atv, vr]) => {
         setCategories(cat.data?.data || cat.data || []);
         setBrands(brd.data?.data || brd.data || []);
@@ -95,7 +87,9 @@ export default function ProductForm() {
         const names = [...new Set(vrList.map((v) => v.name).filter(Boolean))].sort();
         setSystemVariantNames(names);
         const vMap = {};
-        vrList.forEach((v) => { vMap[v.name] = !!v.multi_select; });
+        vrList.forEach((v) => {
+          vMap[v.name] = !!v.multi_select;
+        });
         setMasterVariantMap(vMap);
       })
       .catch(() => {});
@@ -129,7 +123,7 @@ export default function ProductForm() {
           store_id: p.store_id || "",
         });
         if (p.image) {
-          setImagePreview(`${SERVER_URL}${p.image}`);
+          setImagePreview(toMediaUrl(p.image));
           setExistingImage(p.image);
         }
         if (p.product_type === "variant") {
@@ -158,13 +152,10 @@ export default function ProductForm() {
   };
 
   const handleVariantChange = (index, field, value) => {
-    setNewVariants((prev) =>
-      prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)),
-    );
+    setNewVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)));
   };
 
-  const addVariantRow = () =>
-    setNewVariants((prev) => [...prev, { ...EMPTY_VARIANT }]);
+  const addVariantRow = () => setNewVariants((prev) => [...prev, { ...EMPTY_VARIANT }]);
 
   const removeVariantRow = (index) => {
     if (newVariants.length === 1) setNewVariants([{ ...EMPTY_VARIANT }]);
@@ -211,16 +202,10 @@ export default function ProductForm() {
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = t("product_name_required", "product_form");
-    if (currentStore?.id == null && stores.length > 0 && !form.store_id)
-      e.store_id = "Store is required";
+    if (currentStore?.id == null && stores.length > 0 && !form.store_id) e.store_id = "Store is required";
     if (form.product_type !== "variant") {
-      if (form.selling_price === "" || form.selling_price === null)
-        e.selling_price = t("selling_price_required", "product_form");
-      else if (
-        isNaN(Number(form.selling_price)) ||
-        Number(form.selling_price) < 0
-      )
-        e.selling_price = t("selling_price_invalid", "product_form");
+      if (form.selling_price === "" || form.selling_price === null) e.selling_price = t("selling_price_required", "product_form");
+      else if (isNaN(Number(form.selling_price)) || Number(form.selling_price) < 0) e.selling_price = t("selling_price_invalid", "product_form");
     } else {
       const filledVariants = newVariants.filter((v) => v.variant_name.trim());
       if (filledVariants.length === 0 && existingVariants.length === 0) {
@@ -295,9 +280,7 @@ export default function ProductForm() {
         // Sync multi_select on existing variants against the master variants map
         if (isEdit && existingVariants.length > 0) {
           const toSync = existingVariants.filter((ev) => {
-            const masterVal = masterVariantMap.hasOwnProperty(ev.variant_name)
-              ? masterVariantMap[ev.variant_name]
-              : ev.multi_select;
+            const masterVal = masterVariantMap.hasOwnProperty(ev.variant_name) ? masterVariantMap[ev.variant_name] : ev.multi_select;
             return masterVal !== !!ev.multi_select;
           });
           if (toSync.length > 0) {
@@ -321,17 +304,12 @@ export default function ProductForm() {
   };
 
   const err = (name) => (errors[name] ? { borderColor: "var(--red)" } : {});
-  const errMsg = (name) =>
-    errors[name] ? (
-      <span style={{ fontSize: 11, color: "var(--red)" }}>{errors[name]}</span>
-    ) : null;
+  const errMsg = (name) => (errors[name] ? <span style={{ fontSize: 11, color: "var(--red)" }}>{errors[name]}</span> : null);
 
   if (loading)
     return (
       <MainLayout>
-        <div style={{ padding: 24, color: "var(--tx3)" }}>
-          {t("loading", "product_form")}
-        </div>
+        <div style={{ padding: 24, color: "var(--tx3)" }}>{t("loading", "product_form")}</div>
       </MainLayout>
     );
 
@@ -343,29 +321,18 @@ export default function ProductForm() {
         <div className="ch">
           <div className="ct relative flex items-center justify-center w-full">
             <div className="absolute left-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate("/products")}
-              >
+              <Button variant="ghost" size="sm" onClick={() => navigate("/products")}>
                 <ArrowLeft size={14} />
                 <span>{t("back", "products")}</span>
               </Button>
             </div>
-            <strong className="text-base sm:text-xl font-semibold">
-              {isEdit
-                ? t("edit_product", "product_form")
-                : t("create_product", "product_form")}
-            </strong>
+            <strong className="text-base sm:text-xl font-semibold">{isEdit ? t("edit_product", "product_form") : t("create_product", "product_form")}</strong>
           </div>
         </div>
 
         <hr style={{ borderColor: "var(--bd)", margin: "0 0 16px" }} />
 
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-        >
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* BASIC INFO */}
           <div className="col-span-1 sm:col-span-2 lg:col-span-3">
             <p
@@ -415,11 +382,7 @@ export default function ProductForm() {
               >
                 {imagePreview ? (
                   <>
-                    <img
-                      src={imagePreview}
-                      alt="Product"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
+                    <img src={imagePreview} alt="Product" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     <button
                       type="button"
                       onClick={removeImage}
@@ -446,83 +409,42 @@ export default function ProductForm() {
                 )}
               </div>
               <div>
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className="btn btn-g"
-                  style={{ fontSize: 12, marginBottom: 4 }}
-                >
+                <button type="button" onClick={() => fileRef.current?.click()} className="btn btn-g" style={{ fontSize: 12, marginBottom: 4 }}>
                   <Upload size={12} />
                   {imagePreview ? "Change Image" : "Upload Image"}
                 </button>
-                <p style={{ fontSize: 10.5, color: "var(--tx3)" }}>
-                  JPG, PNG or WEBP — max 2 MB
-                </p>
-                {errors.image && (
-                  <p style={{ fontSize: 10.5, color: "var(--red)", marginTop: 2 }}>
-                    {errors.image}
-                  </p>
-                )}
+                <p style={{ fontSize: 10.5, color: "var(--tx3)" }}>JPG, PNG or WEBP — max 2 MB</p>
+                {errors.image && <p style={{ fontSize: 10.5, color: "var(--red)", marginTop: 2 }}>{errors.image}</p>}
               </div>
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleImageChange}
-                style={{ display: "none" }}
-              />
+              <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} style={{ display: "none" }} />
             </div>
           </div>
 
           <div className="fg col-span-1 sm:col-span-2">
             <label>
-              {t("product_name", "product_form")}{" "}
-              <span style={{ color: "var(--red)" }}>*</span>
+              {t("product_name", "product_form")} <span style={{ color: "var(--red)" }}>*</span>
             </label>
-            <input
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              autoFocus
-              style={err("name")}
-              placeholder="e.g. Pepsi 1L"
-            />
+            <input name="name" value={form.name} onChange={handleChange} autoFocus style={err("name")} placeholder="e.g. Pepsi 1L" />
             {errMsg("name")}
           </div>
 
           <div className="fg">
             <label>{t("product_type", "product_form")}</label>
-            <select
-              name="product_type"
-              value={form.product_type}
-              onChange={handleChange}
-            >
+            <select name="product_type" value={form.product_type} onChange={handleChange}>
               <option value="simple">{t("simple", "product_form")}</option>
-              <option value="variant">
-                {t("with_variants", "product_form")}
-              </option>
+              <option value="variant">{t("with_variants", "product_form")}</option>
               <option value="service">{t("service", "product_form")}</option>
             </select>
           </div>
 
           <div className="fg">
             <label>{t("sku", "product_form")}</label>
-            <input
-              name="sku"
-              value={form.sku}
-              onChange={handleChange}
-              placeholder="PEP-001"
-            />
+            <input name="sku" value={form.sku} onChange={handleChange} placeholder="PEP-001" />
           </div>
 
           <div className="fg">
             <label>{t("barcode", "product_form")}</label>
-            <input
-              name="barcode"
-              value={form.barcode}
-              onChange={handleChange}
-              placeholder="123456789"
-            />
+            <input name="barcode" value={form.barcode} onChange={handleChange} placeholder="123456789" />
           </div>
 
           {/* CLASSIFICATION */}
@@ -546,11 +468,7 @@ export default function ProductForm() {
 
           <div className="fg">
             <label>{t("category", "product_form")}</label>
-            <select
-              name="category_id"
-              value={form.category_id}
-              onChange={handleChange}
-            >
+            <select name="category_id" value={form.category_id} onChange={handleChange}>
               <option value="">{t("select_category", "product_form")}</option>
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -562,11 +480,7 @@ export default function ProductForm() {
 
           <div className="fg">
             <label>{t("brand", "product_form")}</label>
-            <select
-              name="brand_id"
-              value={form.brand_id}
-              onChange={handleChange}
-            >
+            <select name="brand_id" value={form.brand_id} onChange={handleChange}>
               <option value="">{t("select_brand", "product_form")}</option>
               {brands.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -602,7 +516,9 @@ export default function ProductForm() {
 
           {currentStore?.id == null && stores.length > 0 && (
             <div className="fg">
-              <label>{t("store_availability", "product_form")} <span style={{ color: "var(--red)" }}>*</span></label>
+              <label>
+                {t("store_availability", "product_form")} <span style={{ color: "var(--red)" }}>*</span>
+              </label>
               <select
                 value={form.store_id || ""}
                 onChange={(e) => {
@@ -638,42 +554,21 @@ export default function ProductForm() {
                 marginTop: 4,
               }}
             >
-              {isVariant
-                ? t("base_pricing", "product_form")
-                : t("pricing", "product_form")}
+              {isVariant ? t("base_pricing", "product_form") : t("pricing", "product_form")}
             </p>
           </div>
 
           <div className="fg">
             <label>{t("cost_price", "product_form")}</label>
-            <input
-              name="cost_price"
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.cost_price}
-              onChange={handleChange}
-              style={err("cost_price")}
-              placeholder="0.00"
-            />
+            <input name="cost_price" type="number" step="0.01" min="0" value={form.cost_price} onChange={handleChange} style={err("cost_price")} placeholder="0.00" />
             {errMsg("cost_price")}
           </div>
 
           <div className="fg">
             <label>
-              {t("selling_price", "product_form")}{" "}
-              {!isVariant && <span style={{ color: "var(--red)" }}>*</span>}
+              {t("selling_price", "product_form")} {!isVariant && <span style={{ color: "var(--red)" }}>*</span>}
             </label>
-            <input
-              name="selling_price"
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.selling_price}
-              onChange={handleChange}
-              style={err("selling_price")}
-              placeholder="0.00"
-            />
+            <input name="selling_price" type="number" step="0.01" min="0" value={form.selling_price} onChange={handleChange} style={err("selling_price")} placeholder="0.00" />
             {errMsg("selling_price")}
           </div>
 
@@ -698,37 +593,17 @@ export default function ProductForm() {
           {!isEdit && (
             <div className="fg">
               <label>{t("opening_stock", "product_form")}</label>
-              <input
-                name="stock_quantity"
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.stock_quantity}
-                onChange={handleChange}
-                placeholder="0"
-              />
+              <input name="stock_quantity" type="number" step="0.01" min="0" value={form.stock_quantity} onChange={handleChange} placeholder="0" />
             </div>
           )}
           <div className="fg">
             <label>{t("alert_when_stock", "product_form")}</label>
-            <input
-              name="stock_alert_quantity"
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.stock_alert_quantity}
-              onChange={handleChange}
-              placeholder="0"
-            />
+            <input name="stock_alert_quantity" type="number" step="0.01" min="0" value={form.stock_alert_quantity} onChange={handleChange} placeholder="0" />
           </div>
 
           <div className="fg">
             <label>{t("status", "product_form")}</label>
-            <select
-              name="is_active"
-              value={form.is_active.toString()}
-              onChange={handleChange}
-            >
+            <select name="is_active" value={form.is_active.toString()} onChange={handleChange}>
               <option value="true">{t("active", "product_form")}</option>
               <option value="false">{t("inactive", "product_form")}</option>
             </select>
@@ -844,10 +719,7 @@ export default function ProductForm() {
                         </thead>
                         <tbody>
                           {existingVariants.map((v) => (
-                            <tr
-                              key={v.id}
-                              style={{ borderTop: "1px solid var(--bd)" }}
-                            >
+                            <tr key={v.id} style={{ borderTop: "1px solid var(--bd)" }}>
                               <td
                                 style={{
                                   padding: "6px 8px",
@@ -900,16 +772,7 @@ export default function ProductForm() {
                                   textAlign: "right",
                                 }}
                               >
-                                <button
-                                  type="button"
-                                  className="hbtn"
-                                  disabled={deletingVariantId === v.id}
-                                  onClick={() =>
-                                    handleDeleteExistingVariant(v.id)
-                                  }
-                                  title={t("remove_variant", "product_form")}
-                                  style={{ color: "var(--red)" }}
-                                >
+                                <button type="button" className="hbtn" disabled={deletingVariantId === v.id} onClick={() => handleDeleteExistingVariant(v.id)} title={t("remove_variant", "product_form")} style={{ color: "var(--red)" }}>
                                   <Trash2 size={12} />
                                 </button>
                               </td>
@@ -921,13 +784,7 @@ export default function ProductForm() {
                   </div>
                 )}
 
-                <p
-                  style={{ fontSize: 11, color: "var(--tx3)", marginBottom: 8 }}
-                >
-                  {existingVariants.length > 0
-                    ? t("add_more_variants", "product_form")
-                    : t("add_variants", "product_form")}
-                </p>
+                <p style={{ fontSize: 11, color: "var(--tx3)", marginBottom: 8 }}>{existingVariants.length > 0 ? t("add_more_variants", "product_form") : t("add_variants", "product_form")}</p>
 
                 <datalist id="variant-name-suggestions">
                   {systemVariantNames.map((name) => (
@@ -940,9 +797,7 @@ export default function ProductForm() {
                     ))}
                 </datalist>
 
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 8 }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {newVariants.map((v, index) => (
                     <div
                       key={index}
@@ -956,87 +811,30 @@ export default function ProductForm() {
                       <div className="fg" style={{ margin: 0 }}>
                         {index === 0 && (
                           <label style={{ fontSize: 11 }}>
-                            {t("variant_name", "product_form")}{" "}
-                            <span style={{ color: "var(--red)" }}>*</span>
+                            {t("variant_name", "product_form")} <span style={{ color: "var(--red)" }}>*</span>
                           </label>
                         )}
-                        <input
-                          list="variant-name-suggestions"
-                          value={v.variant_name}
-                          onChange={(e) =>
-                            handleVariantChange(index, "variant_name", e.target.value)
-                          }
-                          placeholder={t("variant_name_placeholder", "product_form")}
-                          style={{ fontSize: 12 }}
-                        />
+                        <input list="variant-name-suggestions" value={v.variant_name} onChange={(e) => handleVariantChange(index, "variant_name", e.target.value)} placeholder={t("variant_name_placeholder", "product_form")} style={{ fontSize: 12 }} />
                       </div>
                       <div className="fg" style={{ margin: 0 }}>
-                        {index === 0 && (
-                          <label style={{ fontSize: 11 }}>
-                            {t("col_sku", "product_form")}
-                          </label>
-                        )}
-                        <input
-                          value={v.sku}
-                          onChange={(e) => handleVariantChange(index, "sku", e.target.value)}
-                          placeholder={t("optional", "product_form")}
-                          style={{ fontSize: 12 }}
-                        />
+                        {index === 0 && <label style={{ fontSize: 11 }}>{t("col_sku", "product_form")}</label>}
+                        <input value={v.sku} onChange={(e) => handleVariantChange(index, "sku", e.target.value)} placeholder={t("optional", "product_form")} style={{ fontSize: 12 }} />
                       </div>
                       <div className="fg" style={{ margin: 0 }}>
-                        {index === 0 && (
-                          <label style={{ fontSize: 11 }}>
-                            {t("barcode", "product_form")}
-                          </label>
-                        )}
-                        <input
-                          value={v.barcode}
-                          onChange={(e) => handleVariantChange(index, "barcode", e.target.value)}
-                          placeholder={t("optional", "product_form")}
-                          style={{ fontSize: 12 }}
-                        />
+                        {index === 0 && <label style={{ fontSize: 11 }}>{t("barcode", "product_form")}</label>}
+                        <input value={v.barcode} onChange={(e) => handleVariantChange(index, "barcode", e.target.value)} placeholder={t("optional", "product_form")} style={{ fontSize: 12 }} />
                       </div>
                       <div className="fg" style={{ margin: 0 }}>
-                        {index === 0 && (
-                          <label style={{ fontSize: 11 }}>
-                            {t("col_cost", "product_form")}
-                          </label>
-                        )}
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={v.cost_price}
-                          onChange={(e) => handleVariantChange(index, "cost_price", e.target.value)}
-                          placeholder="0.00"
-                          style={{ fontSize: 12 }}
-                        />
+                        {index === 0 && <label style={{ fontSize: 11 }}>{t("col_cost", "product_form")}</label>}
+                        <input type="number" min="0" step="0.01" value={v.cost_price} onChange={(e) => handleVariantChange(index, "cost_price", e.target.value)} placeholder="0.00" style={{ fontSize: 12 }} />
                       </div>
                       <div className="fg" style={{ margin: 0 }}>
-                        {index === 0 && (
-                          <label style={{ fontSize: 11 }}>
-                            {t("col_price", "product_form")}
-                          </label>
-                        )}
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={v.selling_price}
-                          onChange={(e) => handleVariantChange(index, "selling_price", e.target.value)}
-                          placeholder="0.00"
-                          style={{ fontSize: 12 }}
-                        />
+                        {index === 0 && <label style={{ fontSize: 11 }}>{t("col_price", "product_form")}</label>}
+                        <input type="number" min="0" step="0.01" value={v.selling_price} onChange={(e) => handleVariantChange(index, "selling_price", e.target.value)} placeholder="0.00" style={{ fontSize: 12 }} />
                       </div>
                       <div style={{ paddingBottom: 1 }}>
                         {index === 0 && <div style={{ height: 18 }} />}
-                        <button
-                          type="button"
-                          className="hbtn"
-                          onClick={() => removeVariantRow(index)}
-                          title={t("remove_variant", "product_form")}
-                          style={{ color: "var(--tx3)" }}
-                        >
+                        <button type="button" className="hbtn" onClick={() => removeVariantRow(index)} title={t("remove_variant", "product_form")} style={{ color: "var(--tx3)" }}>
                           <Trash2 size={13} />
                         </button>
                       </div>
@@ -1082,23 +880,13 @@ export default function ProductForm() {
           {/* DESCRIPTION */}
           <div className="fg col-span-1 sm:col-span-2 lg:col-span-3">
             <label>{t("description", "product_form")}</label>
-            <textarea
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              rows={3}
-              placeholder={t("description_placeholder", "product_form")}
-            />
+            <textarea name="description" value={form.description} onChange={handleChange} rows={3} placeholder={t("description_placeholder", "product_form")} />
           </div>
 
           {/* ACTIONS */}
           <div className="col-span-1 sm:col-span-2 lg:col-span-3 flex justify-end gap-2">
             <Button type="submit" variant="primary" disabled={saving}>
-              {saving
-                ? t("saving", "product_form")
-                : isEdit
-                  ? t("update_product", "product_form")
-                  : t("create_product", "product_form")}
+              {saving ? t("saving", "product_form") : isEdit ? t("update_product", "product_form") : t("create_product", "product_form")}
             </Button>
             <Button variant="ghost" onClick={() => navigate("/products")}>
               <ArrowLeft size={14} />

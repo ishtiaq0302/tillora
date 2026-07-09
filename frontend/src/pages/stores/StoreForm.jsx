@@ -6,8 +6,7 @@ import { useEffect, useState, useRef } from "react";
 import { createStore, updateStore, getStore } from "../../services/storeService";
 import toast from "react-hot-toast";
 import { useLanguage } from "../../context/LanguageContext";
-
-const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
+import { toMediaUrl } from "../../utils/mediaUrl";
 
 const generateStoreCode = (name) =>
   name
@@ -85,7 +84,7 @@ export default function StoreForm() {
           isActive: data.isActive ?? true,
         });
         if (data.logo) {
-          setLogoPreview(`${SERVER_URL}${data.logo}`);
+          setLogoPreview(toMediaUrl(data.logo));
           setExistingLogo(data.logo);
         }
         if (data.code) setCodeManuallyEdited(true);

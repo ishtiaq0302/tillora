@@ -4,8 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLanguage } from "../context/LanguageContext";
 import toast from "react-hot-toast";
 import { saveSetting, getSettings } from "../services/settingsService";
-
-const SERVER_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/api$/, "");
+import { toMediaUrl } from "../utils/mediaUrl";
 
 const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
   const { user, logout, currentStore, switchStore, canViewAllStores } = useAuth();
@@ -188,7 +187,7 @@ const Header = ({ theme, setTheme, setSidebarOpen, navMode, setNavMode }) => {
           </div>
         )}
         {currentStore?.logo && !logoError ? (
-          <img src={`${SERVER_URL}${currentStore.logo}`} alt={currentStore.name} className="hidden sm:block" style={{ height: 28, maxWidth: 120, objectFit: "contain" }} onError={() => setLogoError(true)} />
+          <img src={toMediaUrl(currentStore.logo)} alt={currentStore.name} className="hidden sm:block" style={{ height: 28, maxWidth: 120, objectFit: "contain" }} onError={() => setLogoError(true)} />
         ) : (
           <div className="logo-tx hidden sm:block">{user?.tenant?.businessName}</div>
         )}
